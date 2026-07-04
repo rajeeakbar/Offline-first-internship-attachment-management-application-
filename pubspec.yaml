@@ -1,0 +1,34 @@
+name: internship_app
+description: "A hybrid Internship/Industrial Attachment Management System."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  supabase_flutter: ^2.6.0
+  sqflite: ^2.3.0
+  flutter_riverpod: ^2.5.1
+  path_provider: ^2.1.2
+  uuid: ^4.3.3
+  connectivity_plus: ^6.0.3
+  pdf: ^3.10.10
+  intl: ^0.19.0
+  path: ^1.9.0
+  image_picker: ^1.1.2
+  printing: ^5.11.1
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
