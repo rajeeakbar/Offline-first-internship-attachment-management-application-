@@ -16,6 +16,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordController = TextEditingController();
   String _selectedRole = 'student';
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   final List<String> _roles = [
     'student',
@@ -41,14 +42,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           message += ' Please check your email for verification.';
         }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Signup failed: $e')),
+          SnackBar(
+            content: Text('Signup failed: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -58,60 +65,138 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              TextFormField(
-                controller: _fullNameController,
-                decoration: const InputDecoration(labelText: 'Full Name'),
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Enter your name' : null,
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
-                keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    value == null || value.isEmpty ? 'Enter your email' : null,
-              ),
-              TextFormField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password'),
-                obscureText: true,
-                validator: (value) => value == null || value.length < 6
-                    ? 'Password must be at least 6 characters'
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedRole,
-                decoration: const InputDecoration(labelText: 'Role'),
-                items: _roles.map((role) {
-                  return DropdownMenuItem(
-                    value: role,
-                    child: Text(role.replaceAll('_', ' ').toUpperCase()),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) setState(() => _selectedRole = value);
-                },
-              ),
-              const SizedBox(height: 24),
-              _isLoading
-                  ? const CircularProgressIndicator()
-                  : ElevatedButton(
-                      onPressed: _signup,
-                      style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                      ),
-                      child: const Text('Sign Up'),
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Join the Portal'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Create Your Account',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Fill in your details to get started',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _fullNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Full Name',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Please enter your name'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: const InputDecoration(
+                            labelText: 'Email Address',
+                            prefixIcon: Icon(Icons.email_outlined),
+                          ),
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (value) => value == null || value.isEmpty
+                              ? 'Please enter your email'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _passwordController,
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                              ),
+                              onPressed: () {
+                                setState(() => _obscurePassword = !_obscurePassword);
+                              },
+                            ),
+                          ),
+                          obscureText: _obscurePassword,
+                          validator: (value) => value == null || value.length < 6
+                              ? 'Password must be at least 6 characters'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          value: _selectedRole,
+                          decoration: const InputDecoration(
+                            labelText: 'Select Role',
+                            prefixIcon: Icon(Icons.badge_outlined),
+                          ),
+                          items: _roles.map((role) {
+                            return DropdownMenuItem(
+                              value: role,
+                              child: Text(role.replaceAll('_', ' ').toUpperCase()),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) setState(() => _selectedRole = value);
+                          },
+                        ),
+                      ],
                     ),
-            ],
+                  ),
+                ),
+                const SizedBox(height: 32),
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton(
+                        onPressed: _signup,
+                        child: const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Already have an account?',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'Sign In',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
