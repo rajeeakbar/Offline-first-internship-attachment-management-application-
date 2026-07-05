@@ -29,15 +29,19 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await ref.read(authRepositoryProvider).signUp(
+      final response = await ref.read(authRepositoryProvider).signUp(
             email: _emailController.text.trim(),
             password: _passwordController.text.trim(),
             fullName: _fullNameController.text.trim(),
             role: _selectedRole,
           );
       if (mounted) {
+        String message = 'Signup successful!';
+        if (response.session == null) {
+          message += ' Please check your email for verification.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signup successful! Please login.')),
+          SnackBar(content: Text(message)),
         );
         Navigator.of(context).pop();
       }

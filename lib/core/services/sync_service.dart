@@ -10,13 +10,17 @@ class SyncService {
   final LocalDatabase _localDb = LocalDatabase.instance;
 
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isSyncing = false;
 
   void startAutoSync() {
+    _connectivitySubscription?.cancel();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       if (results.any((result) => result != ConnectivityResult.none)) {
         syncData();
       }
     });
+    // Initial sync
+    syncData();
   }
 
   void stopAutoSync() {
@@ -24,6 +28,8 @@ class SyncService {
   }
 
   Future<void> syncData() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
     try {
       final db = await _localDb.database;
 
@@ -33,6 +39,8 @@ class SyncService {
       await _syncMedia(db);
     } catch (e) {
       print('Sync failed: $e');
+    } finally {
+      _isSyncing = false;
     }
   }
 

@@ -29,6 +29,18 @@ class AuthRepository {
       password: password,
       data: {'full_name': fullName, 'role': role},
     );
+
+    if (response.user != null) {
+      // Create a profile record in the public.profiles table
+      await _client.from('profiles').upsert({
+        'id': response.user!.id,
+        'full_name': fullName,
+        'role': role,
+        'status': 'pending',
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+    }
+
     return response;
   }
 
