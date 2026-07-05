@@ -24,34 +24,56 @@ class AuthRepository {
     required String fullName,
     required String role,
   }) async {
-    final response = await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {'full_name': fullName, 'role': role},
-    );
+    try {
+      print('Attempting signup for $email');
+      final response = await _client.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': fullName, 'role': role},
+      );
 
-    if (response.user != null) {
-      // Create a profile record in the public.profiles table
-      await _client.from('profiles').upsert({
-        'id': response.user!.id,
-        'full_name': fullName,
-        'role': role,
-        'status': 'pending',
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      if (response.user != null) {
+        print('Signup successful for ${response.user!.id}, creating profile...');
+        // Create a profile record in the public.profiles table
+        await _client.from('profiles').upsert({
+          'id': response.user!.id,
+          'full_name': fullName,
+          'role': role,
+          'status': 'pending',
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+        print('Profile created successfully');
+      }
+
+      return response;
+    } on AuthException catch (e) {
+      print('Auth error during signup: ${e.message} (Status: ${e.statusCode})');
+      rethrow;
+    } catch (e) {
+      print('Unexpected error during signup: $e');
+      rethrow;
     }
-
-    return response;
   }
 
   Future<AuthResponse> signIn({
     required String email,
     required String password,
   }) async {
-    return await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    try {
+      print('Attempting signin for $email');
+      final response = await _client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+      print('Signin successful for ${response.user?.id}');
+      return response;
+    } on AuthException catch (e) {
+      print('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
+      rethrow;
+    } catch (e) {
+      print('Unexpected error during signin: $e');
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
