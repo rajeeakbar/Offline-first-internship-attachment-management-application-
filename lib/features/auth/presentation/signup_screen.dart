@@ -51,10 +51,23 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMessage = 'Signup failed: $e';
+        if (e.toString().contains('over_email_send_rate_limit')) {
+          errorMessage = 'Email rate limit exceeded. Please try again in an hour or contact support.';
+        } else if (e.toString().contains('429')) {
+          errorMessage = 'Too many requests. Please slow down and try again later.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Signup failed: $e'),
+            content: Text(errorMessage),
             backgroundColor: Colors.redAccent,
+            duration: const Duration(seconds: 10),
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }

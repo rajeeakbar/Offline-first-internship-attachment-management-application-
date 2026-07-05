@@ -47,7 +47,7 @@ class SyncService {
   Future<void> _syncTable(Database db, String localTable, String remoteTable) async {
     // 1. Pull changes from Cloud (Incremental) - "Cloud wins"
     final lastSyncResult = await db.rawQuery('SELECT MAX(updated_at) as last_sync FROM $localTable');
-    final String? lastSync = lastSyncResult.first['last_sync'] as String?;
+    final String? lastSync = lastSyncResult.first['last_sync']?.toString();
 
     var query = _supabase.from(remoteTable).select();
     if (lastSync != null) {
@@ -77,8 +77,8 @@ class SyncService {
     for (var record in dirtyRecords) {
       try {
         final Map<String, dynamic> data = Map.from(record);
-        final dynamic id = data['id'];
-        if (id == null || id is! String) continue;
+        final String? id = data['id']?.toString();
+        if (id == null) continue;
 
         data.remove('is_dirty');
         final bool isDeleted = data['is_deleted'] == 1;
@@ -102,11 +102,11 @@ class SyncService {
 
     for (var media in dirtyMedia) {
       try {
-        final dynamic id = media['id'];
-        final dynamic localPath = media['local_path'];
-        final dynamic logId = media['log_id'];
+        final String? id = media['id']?.toString();
+        final String? localPath = media['local_path']?.toString();
+        final String? logId = media['log_id']?.toString();
 
-        if (id == null || id is! String || localPath == null || localPath is! String || logId == null || logId is! String) {
+        if (id == null || localPath == null || logId == null) {
           print('Missing required media data for sync: $id');
           continue;
         }
