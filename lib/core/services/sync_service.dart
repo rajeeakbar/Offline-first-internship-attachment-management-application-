@@ -43,7 +43,7 @@ class SyncService {
     for (var record in dirtyRecords) {
       try {
         final Map<String, dynamic> data = Map.from(record);
-        final String id = data['id'];
+        final String id = data['id'] as String;
 
         data.remove('is_dirty');
 
@@ -91,9 +91,9 @@ class SyncService {
 
     for (var media in dirtyMedia) {
       try {
-        final String id = media['id'];
-        final String localPath = media['local_path'];
-        final String logId = media['log_id'];
+        final String id = media['id'] as String;
+        final String localPath = media['local_path'] as String;
+        final String logId = media['log_id'] as String;
 
         if (media['is_deleted'] == 1) {
           await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);
