@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/auth_repository.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -15,12 +16,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _isLoading = false;
 
   Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       await ref.read(authRepositoryProvider).signIn(
-        email: _emailController.text,
-        password: _passwordController.text,
-      );
+            email: email,
+            password: password,
+          );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: $e')),
@@ -57,7 +68,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
             TextButton(
               onPressed: () {
-                // Navigate to Signup
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const SignupScreen()),
+                );
               },
               child: const Text('Don\'t have an account? Sign up'),
             ),

@@ -7,6 +7,7 @@ import 'package:internship_app/features/supervisor/presentation/supervisor_dashb
 import 'package:internship_app/features/admin/presentation/admin_dashboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/auth/data/auth_repository.dart';
+import 'core/services/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,11 +55,24 @@ class InternshipApp extends ConsumerWidget {
   }
 }
 
-class RootNavigation extends ConsumerWidget {
+class RootNavigation extends ConsumerStatefulWidget {
   const RootNavigation({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RootNavigation> createState() => _RootNavigationState();
+}
+
+class _RootNavigationState extends ConsumerState<RootNavigation> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(syncServiceProvider).startAutoSync();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final role = user?.userMetadata?['role'] ?? 'student';
 
