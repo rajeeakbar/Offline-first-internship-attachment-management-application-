@@ -10,13 +10,17 @@ class SyncService {
   final LocalDatabase _localDb = LocalDatabase.instance;
 
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isSyncing = false;
 
   void startAutoSync() {
+    _connectivitySubscription?.cancel();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((results) {
       if (results.any((result) => result != ConnectivityResult.none)) {
         syncData();
       }
     });
+    // Initial sync
+    syncData();
   }
 
   void stopAutoSync() {
@@ -24,6 +28,8 @@ class SyncService {
   }
 
   Future<void> syncData() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
     try {
       final db = await _localDb.database;
 
@@ -33,6 +39,8 @@ class SyncService {
       await _syncMedia(db);
     } catch (e) {
       print('Sync failed: $e');
+    } finally {
+      _isSyncing = false;
     }
   }
 
@@ -43,7 +51,7 @@ class SyncService {
     for (var record in dirtyRecords) {
       try {
         final Map<String, dynamic> data = Map.from(record);
-        final String id = data['id'];
+        final String id = data['id'] as String;
 
         data.remove('is_dirty');
 
@@ -91,9 +99,9 @@ class SyncService {
 
     for (var media in dirtyMedia) {
       try {
-        final String id = media['id'];
-        final String localPath = media['local_path'];
-        final String logId = media['log_id'];
+        final String id = media['id'] as String;
+        final String localPath = media['local_path'] as String;
+        final String logId = media['log_id'] as String;
 
         if (media['is_deleted'] == 1) {
           await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);

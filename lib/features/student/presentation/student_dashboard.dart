@@ -4,7 +4,6 @@ import 'package:internship_app/features/auth/data/auth_repository.dart';
 import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
-import 'package:uuid/uuid.dart';
 
 class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
@@ -28,7 +27,8 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     if (user == null) return;
 
     final db = await LocalDatabase.instance.database;
-    final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+    final results =
+        await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
 
     if (results.isNotEmpty && results.first['supervisor_id'] != null) {
       setState(() => _isAllocated = true);
@@ -38,64 +38,182 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    final theme = Theme.of(context);
+    final user = ref.watch(currentUserProvider);
+    final fullName = user?.userMetadata?['full_name'] ?? 'Student';
+
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     if (!_isAllocated) {
       return const SupervisorSelectionScreen();
     }
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Student Portal'),
+        title: const Text('Logbook Dashboard'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.download),
-            tooltip: 'Export Logs PDF',
-            onPressed: () {
-              final user = ref.read(currentUserProvider);
-              PdfExportService.generateStudentLogReport(user!.id, user.userMetadata?['full_name'] ?? 'Student');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () {
-              // Navigate to profile to edit or logout
-            },
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Sign Out',
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSummaryCard(),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () => _createNewLogEntry(),
-            icon: const Icon(Icons.add),
-            label: const Text('Submit Daily Log'),
-            style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-          ),
-          const SizedBox(height: 20),
-          const Text('Recent Logs', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          // List of logs would go here
-        ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Hello, $fullName!',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Keep track of your internship progress.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            _buildSummaryCard(theme),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Activities',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {},
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildEmptyLogsPlaceholder(theme),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _createNewLogEntry(),
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('New Daily Log'),
       ),
     );
   }
 
-  Widget _buildSummaryCard() {
+  Widget _buildSummaryCard(ThemeData theme) {
     return Card(
+      elevation: 0,
+      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.1)),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text('Internship Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
-            Text('Days Completed: 12 / 60'),
-            LinearProgressIndicator(value: 0.2, backgroundColor: Colors.grey),
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Internship Progress',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '12 of 60 days completed',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.trending_up_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: 0.2,
+                minHeight: 10,
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+              ),
+            ),
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: () {
+                final user = ref.read(currentUserProvider);
+                PdfExportService.generateStudentLogReport(
+                  user!.id,
+                  user.userMetadata?['full_name'] ?? 'Student',
+                );
+              },
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text('Generate PDF Report'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyLogsPlaceholder(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(
+            Icons.assignment_outlined,
+            size: 64,
+            color: theme.colorScheme.onSurface.withOpacity(0.1),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No logs submitted yet',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -109,10 +227,12 @@ class SupervisorSelectionScreen extends ConsumerStatefulWidget {
   const SupervisorSelectionScreen({super.key});
 
   @override
-  ConsumerState<SupervisorSelectionScreen> createState() => _SupervisorSelectionScreenState();
+  ConsumerState<SupervisorSelectionScreen> createState() =>
+      _SupervisorSelectionScreenState();
 }
 
-class _SupervisorSelectionScreenState extends ConsumerState<SupervisorSelectionScreen> {
+class _SupervisorSelectionScreenState
+    extends ConsumerState<SupervisorSelectionScreen> {
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _staffList = [];
   bool _isSearching = false;
@@ -121,97 +241,166 @@ class _SupervisorSelectionScreenState extends ConsumerState<SupervisorSelectionS
     setState(() => _isSearching = true);
     final supabase = sb.Supabase.instance.client;
 
-    // In a real app, we'd search the local 'staff' table or remote 'profiles'
-    final results = await supabase
-        .from('profiles')
-        .select()
-        .inFilter('role', ['academic_supervisor', 'industry_supervisor'])
-        .ilike('full_name', '%$query%');
+    try {
+      final results = await supabase
+          .from('profiles')
+          .select()
+          .inFilter('role', ['academic_supervisor', 'industry_supervisor'])
+          .ilike('full_name', '%$query%');
 
-    setState(() {
-      _staffList = List<Map<String, dynamic>>.from(results);
-      _isSearching = false;
-    });
+      setState(() {
+        _staffList = List<Map<String, dynamic>>.from(results);
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() => _isSearching = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Search failed: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _selectSupervisor(Map<String, dynamic> staff) async {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    final db = await LocalDatabase.instance.database;
-    final now = DateTime.now().toIso8601String();
+    setState(() => _isSearching = true);
+    try {
+      final db = await LocalDatabase.instance.database;
+      final now = DateTime.now().toIso8601String();
 
-    await db.update('profiles', {
-      'supervisor_id': staff['id'],
-      'updated_at': now,
-      'is_dirty': 1,
-    }, where: 'id = ?', whereArgs: [user.id]);
+      await db.update('profiles', {
+        'supervisor_id': staff['id'],
+        'updated_at': now,
+        'is_dirty': 1,
+      }, where: 'id = ?', whereArgs: [user.id]);
 
-    // Also update remote Supabase profile
-    await sb.Supabase.instance.client
-        .from('profiles')
-        .update({'supervisor_id': staff['id']})
-        .eq('id', user.id);
+      await sb.Supabase.instance.client
+          .from('profiles')
+          .update({'supervisor_id': staff['id']})
+          .eq('id', user.id);
 
-    // Refresh dashboard
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const StudentDashboard()),
-      );
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const StudentDashboard()),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSearching = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Selection failed: $e')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Complete Onboarding'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             onPressed: () => ref.read(authRepositoryProvider).signOut(),
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Please select your assigned supervisor to unlock your dashboard.',
-              style: TextStyle(fontSize: 16),
+            const Icon(
+              Icons.verified_user_outlined,
+              size: 64,
+              color: Colors.indigo,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+            Text(
+              'One last step!',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please select your assigned supervisor to unlock your student dashboard.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 32),
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                labelText: 'Search Supervisor by Name',
+                hintText: 'Search supervisor by name...',
+                prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
+                  icon: const Icon(Icons.arrow_forward_rounded),
                   onPressed: () => _searchStaff(_searchController.text),
                 ),
               ),
               onSubmitted: _searchStaff,
             ),
-            const SizedBox(height: 20),
-            if (_isSearching) const CircularProgressIndicator(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _staffList.length,
-                itemBuilder: (context, index) {
-                  final staff = _staffList[index];
-                  return ListTile(
-                    title: Text(staff['full_name'] ?? 'No Name'),
-                    subtitle: Text(staff['department'] ?? 'No Department'),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _selectSupervisor(staff),
-                  );
-                },
+            const SizedBox(height: 24),
+            if (_isSearching)
+              const Center(child: CircularProgressIndicator())
+            else
+              Expanded(
+                child: _staffList.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No supervisors found. Try searching.',
+                          style: TextStyle(color: Colors.grey[500]),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: _staffList.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final staff = _staffList[index];
+                          return Card(
+                            margin: EdgeInsets.zero,
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: theme.colorScheme.primaryContainer,
+                                child: Text(
+                                  (staff['full_name'] as String? ?? 'U')[0]
+                                      .toUpperCase(),
+                                  style: TextStyle(color: theme.colorScheme.primary),
+                                ),
+                              ),
+                              title: Text(
+                                staff['full_name'] ?? 'Anonymous Staff',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(staff['department'] ?? 'General Dept'),
+                              trailing: const Icon(Icons.add_circle_outline,
+                                  color: Colors.indigo),
+                              onTap: () => _selectSupervisor(staff),
+                            ),
+                          );
+                        },
+                      ),
               ),
-            ),
           ],
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }

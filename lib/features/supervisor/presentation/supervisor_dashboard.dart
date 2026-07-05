@@ -8,7 +8,8 @@ class SupervisorDashboard extends ConsumerStatefulWidget {
   const SupervisorDashboard({super.key, required this.isAcademic});
 
   @override
-  ConsumerState<SupervisorDashboard> createState() => _SupervisorDashboardState();
+  ConsumerState<SupervisorDashboard> createState() =>
+      _SupervisorDashboardState();
 }
 
 class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
@@ -23,10 +24,12 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
 
   Future<void> _loadAssignedStudents() async {
     final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
     final db = await LocalDatabase.instance.database;
 
-    // In a hybrid app, we'd query the local 'profiles' table filtered by supervisor_id
-    final results = await db.query('profiles', where: 'supervisor_id = ?', whereArgs: [user!.id]);
+    final results = await db
+        .query('profiles', where: 'supervisor_id = ?', whereArgs: [user.id]);
 
     setState(() {
       _assignedStudents = results;
@@ -36,64 +39,131 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: Text(widget.isAcademic ? 'Academic Supervisor' : 'Industry Supervisor'),
+        title: Text(widget.isAcademic ? 'Academic Portal' : 'Industry Portal'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout_rounded),
             onPressed: () => ref.read(authRepositoryProvider).signOut(),
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _buildStatsOverview(),
-                const Divider(),
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('Your Assigned Students', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _assignedStudents.length,
-                    itemBuilder: (context, index) {
-                      final student = _assignedStudents[index];
-                      return ListTile(
-                        title: Text(student['full_name'] ?? 'Unknown Student'),
-                        subtitle: Text('Logs: 5 Pending Approval'),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _viewStudentLogs(student),
-                      );
-                    },
+          : CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverToBoxAdapter(
+                    child: _buildStatsOverview(theme),
                   ),
                 ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      'Your Assigned Students',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                _assignedStudents.isEmpty
+                    ? SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Text(
+                            'No students assigned yet.',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        ),
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final student = _assignedStudents[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        theme.colorScheme.secondaryContainer,
+                                    child: Text(
+                                      (student['full_name'] as String? ?? 'S')[0]
+                                          .toUpperCase(),
+                                      style: TextStyle(
+                                          color: theme.colorScheme.secondary),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    student['full_name'] ?? 'Unknown Student',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: const Text('5 Pending Logs Approval'),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: () => _viewStudentLogs(student),
+                                ),
+                              );
+                            },
+                            childCount: _assignedStudents.length,
+                          ),
+                        ),
+                      ),
               ],
             ),
     );
   }
 
-  Widget _buildStatsOverview() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _statItem('Students', _assignedStudents.length.toString()),
-          _statItem('Pending Logs', '12'),
-          _statItem('Average Grade', 'B+'),
-        ],
+  Widget _buildStatsOverview(ThemeData theme) {
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.1)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _statItem(theme, 'Students', _assignedStudents.length.toString(),
+                Icons.people_outline),
+            _statItem(theme, 'Pending', '12', Icons.pending_actions_outlined),
+            _statItem(theme, 'Avg. Grade', 'B+', Icons.grade_outlined),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _statItem(String label, String value) {
+  Widget _statItem(ThemeData theme, String label, String value, IconData icon) {
     return Column(
       children: [
-        Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.grey)),
+        Icon(icon, color: theme.colorScheme.primary, size: 24),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+        Text(
+          label,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
       ],
     );
   }

@@ -7,6 +7,7 @@ import 'package:internship_app/features/supervisor/presentation/supervisor_dashb
 import 'package:internship_app/features/admin/presentation/admin_dashboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/auth/data/auth_repository.dart';
+import 'core/services/providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,9 +33,52 @@ class InternshipApp extends ConsumerWidget {
 
     return MaterialApp(
       title: 'Internship Management',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
         useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.indigo,
+          primary: Colors.indigo,
+          secondary: Colors.amber,
+          surface: Colors.grey[50]!,
+        ),
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: Colors.indigo.withOpacity(0.1)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.indigo, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 54),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          centerTitle: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
       ),
       home: authState.when(
         data: (session) {
@@ -54,11 +98,24 @@ class InternshipApp extends ConsumerWidget {
   }
 }
 
-class RootNavigation extends ConsumerWidget {
+class RootNavigation extends ConsumerStatefulWidget {
   const RootNavigation({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RootNavigation> createState() => _RootNavigationState();
+}
+
+class _RootNavigationState extends ConsumerState<RootNavigation> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(syncServiceProvider).startAutoSync();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final role = user?.userMetadata?['role'] ?? 'student';
 
