@@ -45,29 +45,7 @@ class SyncService {
   }
 
   Future<void> _syncTable(Database db, String localTable, String remoteTable) async {
-    // 1. Push local changes to Cloud
-    final dirtyRecords = await db.query(localTable, where: 'is_dirty = ?', whereArgs: [1]);
-
-    for (var record in dirtyRecords) {
-      try {
-        final Map<String, dynamic> data = Map.from(record);
-        final String id = data['id'] as String;
-
-        data.remove('is_dirty');
-
-        if (data['is_deleted'] == 1) {
-          await _supabase.from(remoteTable).delete().eq('id', id);
-          await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
-        } else {
-          await _supabase.from(remoteTable).upsert(data);
-          await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
-        }
-      } catch (e) {
-        print('Failed to push record from $localTable: $e');
-      }
-    }
-
-    // 2. Pull changes from Cloud (Incremental)
+    // 1. Pull changes from Cloud (Incremental) - "Cloud wins"
     final lastSyncResult = await db.rawQuery('SELECT MAX(updated_at) as last_sync FROM $localTable');
     final String? lastSync = lastSyncResult.first['last_sync'] as String?;
 
@@ -92,6 +70,31 @@ class SyncService {
         print('Failed to pull record to $localTable: $e');
       }
     }
+
+    // 2. Push local changes to Cloud
+    final dirtyRecords = await db.query(localTable, where: 'is_dirty = ?', whereArgs: [1]);
+
+    for (var record in dirtyRecords) {
+      try {
+        final Map<String, dynamic> data = Map.from(record);
+        final dynamic id = data['id'];
+        if (id == null || id is! String) continue;
+
+        data.remove('is_dirty');
+        final bool isDeleted = data['is_deleted'] == 1;
+        data.remove('is_deleted');
+
+        if (isDeleted) {
+          await _supabase.from(remoteTable).delete().eq('id', id);
+          await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
+        } else {
+          await _supabase.from(remoteTable).upsert(data);
+          await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
+        }
+      } catch (e) {
+        print('Failed to push record from $localTable: $e');
+      }
+    }
   }
 
   Future<void> _syncMedia(Database db) async {
@@ -99,9 +102,14 @@ class SyncService {
 
     for (var media in dirtyMedia) {
       try {
-        final String id = media['id'] as String;
-        final String localPath = media['local_path'] as String;
-        final String logId = media['log_id'] as String;
+        final dynamic id = media['id'];
+        final dynamic localPath = media['local_path'];
+        final dynamic logId = media['log_id'];
+
+        if (id == null || id is! String || localPath == null || localPath is! String || logId == null || logId is! String) {
+          print('Missing required media data for sync: $id');
+          continue;
+        }
 
         if (media['is_deleted'] == 1) {
           await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);
@@ -112,20 +120,28 @@ class SyncService {
           final file = File(localPath);
           if (await file.exists()) {
             final fileName = '$logId/${id.split('-').last}';
-            await _supabase.storage.from('logs').upload(fileName, file);
 
-            final String publicUrl = _supabase.storage.from('logs').getPublicUrl(fileName);
+            try {
+              await _supabase.storage.from('logs').upload(fileName, file, fileOptions: const FileOptions(upsert: true));
 
-            await db.update('media_attachments', {
-              'remote_url': publicUrl,
-              'is_dirty': 0,
-            }, where: 'id = ?', whereArgs: [id]);
+              final String publicUrl = _supabase.storage.from('logs').getPublicUrl(fileName);
 
-            final Map<String, dynamic> remoteMedia = Map.from(media);
-            remoteMedia['remote_url'] = publicUrl;
-            remoteMedia.remove('is_dirty');
-            remoteMedia.remove('local_path'); // Local path not needed in cloud
-            await _supabase.from('media_attachments').upsert(remoteMedia);
+              await db.update('media_attachments', {
+                'remote_url': publicUrl,
+                'is_dirty': 0,
+              }, where: 'id = ?', whereArgs: [id]);
+
+              final Map<String, dynamic> remoteMedia = Map.from(media);
+              remoteMedia['remote_url'] = publicUrl;
+              remoteMedia.remove('is_dirty');
+              remoteMedia.remove('is_deleted');
+              remoteMedia.remove('local_path');
+              await _supabase.from('media_attachments').upsert(remoteMedia);
+            } catch (uploadError) {
+              print('Failed to upload media file $id: $uploadError');
+            }
+          } else {
+            print('Local file missing for media attachment: $localPath');
           }
         }
       } catch (e) {

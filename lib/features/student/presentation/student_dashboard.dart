@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:internship_app/features/auth/data/auth_repository.dart';
 import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
+import 'package:internship_app/features/student/presentation/log_entry_form.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 class StudentDashboard extends ConsumerStatefulWidget {
@@ -219,7 +220,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 
   void _createNewLogEntry() {
-    // Navigate to Log Entry Form
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => LogEntryForm()),
+    ).then((_) => setState(() {})); // Refresh status if needed
   }
 }
 
