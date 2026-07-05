@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/auth_repository.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -57,7 +58,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
             TextButton(
               onPressed: () {
-                // Navigate to Signup
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const SignupScreen()),
+                );
               },
               child: const Text('Don\'t have an account? Sign up'),
             ),
