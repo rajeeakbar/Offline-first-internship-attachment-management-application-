@@ -13,8 +13,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
+    url: 'https://pbxumeocnpqqtiwlvrhm.supabase.co',
+    anonKey: 'sb_publishable_06iBS3umW08dnUkenoRDcw_Udz2WYc6',
   );
 
   runApp(
@@ -23,6 +23,8 @@ void main() async {
     ),
   );
 }
+
+
 
 class InternshipApp extends ConsumerWidget {
   const InternshipApp({super.key});
