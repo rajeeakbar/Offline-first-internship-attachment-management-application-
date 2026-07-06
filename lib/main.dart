@@ -106,78 +106,70 @@ class RootNavigation extends ConsumerStatefulWidget {
 }
 
 class _RootNavigationState extends ConsumerState<RootNavigation> {
-  bool _isInitializing = true;
-  String? _resolvedRole;
-
   @override
   void initState() {
     super.initState();
-    _initializeUser();
+    _startSync();
   }
 
-  Future<void> _initializeUser() async {
-    final syncService = ref.read(syncServiceProvider);
-
-    // Start sync immediately
-    syncService.startAutoSync();
-
-    // Attempt to resolve role from metadata first
-    final user = ref.read(currentUserProvider);
-    String? role = user?.userMetadata?['role'];
-
-    // If not in metadata, check the profiles table (local or remote)
-    if (role == null && user != null) {
-      try {
-        final response = await Supabase.instance.client
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (response != null) {
-          role = response['role'];
-        }
-      } catch (e) {
-        debugPrint('Error fetching role: $e');
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _resolvedRole = role ?? 'student';
-        _isInitializing = false;
-      });
-    }
+  void _startSync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(syncServiceProvider).startAutoSync();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isInitializing) {
-      return const Scaffold(
+    final profileAsync = ref.watch(userProfileProvider);
+    final user = ref.watch(currentUserProvider);
+
+    return profileAsync.when(
+      data: (profile) {
+        // Fallback to metadata if profile record is still syncing
+        final role = profile?['role'] ?? user?.userMetadata?['role'] ?? 'student';
+
+        switch (role) {
+          case 'student':
+            return const StudentDashboard();
+          case 'academic_supervisor':
+            return const SupervisorDashboard(isAcademic: true);
+          case 'industry_supervisor':
+            return const SupervisorDashboard(isAcademic: false);
+          case 'admin':
+            return const AdminDashboard();
+          default:
+            return const StudentDashboard();
+        }
+      },
+      loading: () => const Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircularProgressIndicator(),
               SizedBox(height: 16),
-              Text('Setting up your workspace...'),
+              Text('Setting up your workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
             ],
           ),
         ),
-      );
-    }
-
-    switch (_resolvedRole) {
-      case 'student':
-        return const StudentDashboard();
-      case 'academic_supervisor':
-        return const SupervisorDashboard(isAcademic: true);
-      case 'industry_supervisor':
-        return const SupervisorDashboard(isAcademic: false);
-      case 'admin':
-        return const AdminDashboard();
-      default:
-        return const StudentDashboard();
-    }
+      ),
+      error: (error, stack) => Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              Text('Session error: $error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                child: const Text('Back to Login'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

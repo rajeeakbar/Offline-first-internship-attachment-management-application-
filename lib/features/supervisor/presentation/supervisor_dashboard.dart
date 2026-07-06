@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/providers.dart';
+import '../../../core/services/main_drawer.dart';
 import '../../auth/data/auth_repository.dart';
 
 class SupervisorDashboard extends ConsumerStatefulWidget {
@@ -45,16 +47,17 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(widget.isAcademic ? 'Academic Portal' : 'Industry Portal'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-          ),
-        ],
       ),
-      body: _isLoading
+      drawer: const MainDrawer(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(syncServiceProvider).syncData();
+          await _loadAssignedStudents();
+        },
+        child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverPadding(
                   padding: const EdgeInsets.all(20),
@@ -120,6 +123,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                       ),
               ],
             ),
+      ),
     );
   }
 
@@ -176,7 +180,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
           isAcademic: widget.isAcademic,
         ),
       ),
-    );
+    ).then((_) => _loadAssignedStudents());
   }
 }
 

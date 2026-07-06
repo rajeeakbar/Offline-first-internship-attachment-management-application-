@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -6,6 +7,7 @@ import '../../../core/services/local_database.dart';
 
 class PdfExportService {
   static Future<void> generateStudentLogReport(String studentId, String studentName) async {
+    debugPrint('Generating PDF report for student: $studentName');
     final pdf = pw.Document();
     final db = await LocalDatabase.instance.database;
 

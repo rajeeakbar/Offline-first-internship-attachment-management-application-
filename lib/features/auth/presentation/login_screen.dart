@@ -83,6 +83,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     color: Colors.grey[600],
                   ),
                 ),
+                const SizedBox(height: 4),
+                const Text(
+                  'v2.1 - Enhanced Performance',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, color: Colors.indigo, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 40),
                 Card(
                   child: Padding(

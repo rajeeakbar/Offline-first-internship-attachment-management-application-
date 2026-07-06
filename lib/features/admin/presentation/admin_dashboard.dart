@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/providers.dart';
+import '../../../core/services/main_drawer.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -42,41 +44,43 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Institution Admin'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-          ),
-        ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'System Overview',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+      drawer: const MainDrawer(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(syncServiceProvider).syncData();
+          await _loadStats();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              'System Overview',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _buildSummaryCards(theme),
-          const SizedBox(height: 32),
-          Text(
-            'Management Tools',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 16),
+            _buildSummaryCards(theme),
+            const SizedBox(height: 32),
+            Text(
+              'Management Tools',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
-              'Manage participating companies'),
-          _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
-              'Match students to supervisors'),
-          _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
-              'View institution-wide progress'),
-          _buildMenuTile(theme, Icons.settings_suggest_rounded,
-              'System Settings', 'Configure attachment parameters'),
-        ],
+            const SizedBox(height: 16),
+            _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
+                'Manage participating companies'),
+            _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
+                'Match students to supervisors'),
+            _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
+                'View institution-wide progress'),
+            _buildMenuTile(theme, Icons.settings_suggest_rounded,
+                'System Settings', 'Configure attachment parameters'),
+          ],
+        ),
       ),
     );
   }

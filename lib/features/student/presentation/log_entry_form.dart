@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import 'dart:io';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/providers.dart';
 import '../../auth/data/auth_repository.dart';
 
 class LogEntryForm extends ConsumerStatefulWidget {
@@ -31,6 +32,13 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     if (!_formKey.currentState!.validate()) return;
 
     final user = ref.read(currentUserProvider);
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session expired. Please sign in again.')),
+      );
+      return;
+    }
+
     final db = await LocalDatabase.instance.database;
     final logId = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
@@ -65,6 +73,8 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Log submitted successfully (Offline-first)')),
       );
+      // Trigger a sync if possible
+      ref.read(syncServiceProvider).syncData();
       Navigator.of(context).pop();
     }
   }

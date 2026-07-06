@@ -5,6 +5,7 @@ import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
 import 'package:internship_app/features/student/presentation/log_entry_form.dart';
 import 'package:internship_app/core/services/providers.dart';
+import 'package:internship_app/core/services/main_drawer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 class StudentDashboard extends ConsumerStatefulWidget {
@@ -88,52 +89,53 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Logbook Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Sign Out',
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-          ),
-        ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Hello, $fullName!',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
+      drawer: const MainDrawer(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(syncServiceProvider).syncData();
+          await _checkAllocationStatus();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Hello, $fullName!',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Keep track of your internship progress.',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 24),
-            _buildSummaryCard(theme),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Your Weekly Logs',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+              const SizedBox(height: 8),
+              Text(
+                'Keep track of your internship progress.',
+                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 24),
+              _buildSummaryCard(theme),
+              const SizedBox(height: 32),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Your Weekly Logs',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                TextButton(
-                  onPressed: () {},
-                  child: const Text('View All'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildEmptyLogsPlaceholder(theme),
-          ],
+                  TextButton(
+                    onPressed: () {},
+                    child: const Text('View All'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildEmptyLogsPlaceholder(theme),
+            ],
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -365,6 +367,16 @@ class _SupervisorSelectionScreenState
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _staffList = [];
   bool _isSearching = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialStaff();
+  }
+
+  Future<void> _loadInitialStaff() async {
+    _searchStaff('');
+  }
 
   Future<void> _searchStaff(String query) async {
     setState(() {
