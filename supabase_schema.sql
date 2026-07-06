@@ -78,5 +78,29 @@ CREATE POLICY "Access based on log entry visibility" ON public.media_attachments
   );
 
 -- 8. Storage Buckets
+-- 8. Companies Table
+CREATE TABLE public.companies (
+  id UUID PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT,
+  contact_person TEXT,
+  email TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Companies are viewable by authenticated users" ON public.companies
+  FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Admins can manage companies" ON public.companies
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- 9. Storage Buckets
 -- Run this in the Supabase Dashboard:
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('logs', 'logs', true);
