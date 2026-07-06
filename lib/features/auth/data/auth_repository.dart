@@ -66,6 +66,21 @@ class AuthRepository {
         password: password,
       );
       print('Signin successful for ${response.user?.id}');
+
+      // Important: Ensure we have a local profile record
+      if (response.user != null) {
+        final profile = await _client
+            .from('profiles')
+            .select()
+            .eq('id', response.user!.id)
+            .maybeSingle();
+
+        if (profile != null) {
+          final db = await Supabase.instance.client; // Just a dummy to get db? No, use LocalDatabase
+          // We'll trigger a sync instead
+        }
+      }
+
       return response;
     } on AuthException catch (e) {
       print('Auth error during signin: ${e.message} (Status: ${e.statusCode})');

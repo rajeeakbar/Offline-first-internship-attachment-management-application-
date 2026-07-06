@@ -4,6 +4,10 @@ import '../../auth/data/auth_repository.dart';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 import '../../../core/services/main_drawer.dart';
+import 'student_allocation_screen.dart';
+import 'company_management_screen.dart';
+import 'completion_metrics_screen.dart';
+import 'system_settings_screen.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -72,13 +76,21 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             ),
             const SizedBox(height: 16),
             _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
-                'Manage participating companies'),
+                'Manage participating companies', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompanyManagementScreen()));
+                }),
             _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
-                'Match students to supervisors'),
+                'Match students to supervisors', onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentAllocationScreen()));
+                }),
             _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
-                'View institution-wide progress'),
+                'View institution-wide progress', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompletionMetricsScreen()));
+                }),
             _buildMenuTile(theme, Icons.settings_suggest_rounded,
-                'System Settings', 'Configure attachment parameters'),
+                'System Settings', 'Configure attachment parameters', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemSettingsScreen()));
+                }),
           ],
         ),
       ),
@@ -145,7 +157,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildMenuTile(
-      ThemeData theme, IconData icon, String title, String subtitle) {
+      ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ListTile(
@@ -164,7 +176,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         ),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-        onTap: () {},
+        onTap: onTap,
       ),
     );
   }

@@ -29,6 +29,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
+    // Invalidate profile to get fresh data
+    ref.invalidate(userProfileProvider);
+
     try {
       // 1. Check local database first
       final db = await LocalDatabase.instance.database;
@@ -413,13 +416,16 @@ class _SupervisorSelectionScreenState
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
+    // Determine if we are selecting academic or industry
+    final isIndustry = staff['role'] == 'industry_supervisor';
+
     setState(() => _isSearching = true);
     try {
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
       await db.update('profiles', {
-        'supervisor_id': staff['id'],
+        isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
         'updated_at': now,
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
@@ -427,7 +433,7 @@ class _SupervisorSelectionScreenState
       await sb.Supabase.instance.client
           .from('profiles')
           .update({
-            'supervisor_id': staff['id'],
+            isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
             'updated_at': now,
           })
           .eq('id', user.id);

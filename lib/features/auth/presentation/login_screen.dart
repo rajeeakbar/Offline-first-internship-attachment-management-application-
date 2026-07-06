@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/services/providers.dart';
 import '../data/auth_repository.dart';
 import 'signup_screen.dart';
 
@@ -33,6 +34,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             email: email,
             password: password,
           );
+      // Explicitly invalidate profile provider to ensure fresh data for RootNavigation
+      ref.invalidate(userProfileProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

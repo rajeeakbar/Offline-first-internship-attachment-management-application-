@@ -208,15 +208,19 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
     setState(() => _logs = results);
   }
 
-  Future<void> _approveLog(String logId, {int? score}) async {
+  Future<void> _updateLogStatus(String logId, String status, {int? score, String? recommendation}) async {
     final db = await LocalDatabase.instance.database;
     await db.update('log_entries', {
-      'status': 'approved',
+      'status': status,
       'score': score,
+      'recommendation': recommendation,
       'is_dirty': 1,
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [logId]);
     _loadLogs();
+
+    // Trigger sync in background
+    ref.read(syncServiceProvider).syncData();
   }
 
   @override
@@ -244,26 +248,35 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
                       const Text('Knowledge Acquired:', style: TextStyle(fontWeight: FontWeight.bold)),
                       Text(log['knowledge_acquired'] ?? 'No info provided'),
                       const SizedBox(height: 20),
-                      if (log['status'] == 'submitted')
+                      if (log['status'] == 'submitted' || log['status'] == 'pending')
                         Row(
                           children: [
                             if (widget.isAcademic)
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () => _showGradingDialog(log['id']),
-                                  child: const Text('Grade Assessment'),
+                                  onPressed: () => _showReviewDialog(log),
+                                  child: const Text('Review & Grade'),
                                 ),
                               )
                             else
                               Expanded(
                                 child: ElevatedButton(
-                                  onPressed: () => _approveLog(log['id']),
-                                  child: const Text('Sign Off (Approve)'),
+                                  onPressed: () => _showReviewDialog(log),
+                                  child: const Text('Review & Sign Off'),
                                 ),
                               ),
-                            const SizedBox(width: 10),
-                            TextButton(onPressed: () {}, child: const Text('Reject')),
                           ],
+                        ),
+                      if (log['recommendation'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Supervisor Feedback:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              Text(log['recommendation'], style: const TextStyle(fontStyle: FontStyle.italic)),
+                            ],
+                          ),
                         ),
                     ],
                   ),
@@ -276,37 +289,68 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
     );
   }
 
-  void _showGradingDialog(String logId) {
-    int score = 5;
+  void _showReviewDialog(Map<String, dynamic> log) {
+    int score = log['score'] ?? 5;
+    final TextEditingController recommendationController = TextEditingController(text: log['recommendation']);
+    String status = 'approved';
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Grade Log Entry'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Rate performance (1-10)'),
-                  Slider(
-                    value: score.toDouble(),
-                    min: 1,
-                    max: 10,
-                    divisions: 9,
-                    label: score.toString(),
-                    onChanged: (val) => setDialogState(() => score = val.toInt()),
-                  ),
-                ],
+              title: Text('Review Day ${log['day_number']}'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.isAcademic) ...[
+                      const Text('Rate performance (1-10)'),
+                      Slider(
+                        value: score.toDouble(),
+                        min: 1,
+                        max: 10,
+                        divisions: 9,
+                        label: score.toString(),
+                        onChanged: (val) => setDialogState(() => score = val.toInt()),
+                      ),
+                    ],
+                    TextField(
+                      controller: recommendationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Feedback / Recommendation',
+                        hintText: 'Enter your comments here...',
+                      ),
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: status,
+                      decoration: const InputDecoration(labelText: 'Action'),
+                      items: const [
+                        DropdownMenuItem(value: 'approved', child: Text('Approve / Sign Off')),
+                        DropdownMenuItem(value: 'pending', child: Text('Keep Pending')),
+                        DropdownMenuItem(value: 'rejected', child: Text('Reject / Requires Revision')),
+                      ],
+                      onChanged: (val) => setDialogState(() => status = val!),
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
                 ElevatedButton(
                   onPressed: () {
-                    _approveLog(logId, score: score);
+                    _updateLogStatus(
+                      log['id'],
+                      status,
+                      score: widget.isAcademic ? score : null,
+                      recommendation: recommendationController.text,
+                    );
                     Navigator.pop(context);
                   },
-                  child: const Text('Submit Grade'),
+                  child: const Text('Submit Review'),
                 ),
               ],
             );

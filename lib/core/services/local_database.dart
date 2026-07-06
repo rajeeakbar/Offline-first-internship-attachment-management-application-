@@ -50,6 +50,7 @@ class LocalDatabase {
         full_name $nullableTextType,
         role $nullableTextType,
         supervisor_id $nullableTextType,
+        industry_supervisor_id $nullableTextType,
         department $nullableTextType,
         student_id_number $nullableTextType,
         company_name $nullableTextType,
@@ -90,6 +91,31 @@ class LocalDatabase {
         updated_at $timestampType,
         is_dirty $boolType,
         is_deleted $boolType
+      )
+    ''');
+
+    // Companies Table
+    await db.execute('''
+      CREATE TABLE companies (
+        id $uuidType,
+        name $textType,
+        address $nullableTextType,
+        contact_person $nullableTextType,
+        email $nullableTextType,
+        updated_at $timestampType,
+        is_dirty $boolType,
+        is_deleted $boolType
+      )
+    ''');
+
+    // App Settings Table
+    await db.execute('''
+      CREATE TABLE app_settings (
+        id TEXT PRIMARY KEY,
+        key TEXT UNIQUE,
+        value TEXT,
+        updated_at $timestampType,
+        is_dirty $boolType
       )
     ''');
   }

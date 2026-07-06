@@ -36,9 +36,10 @@ class SyncService {
     try {
       final db = await _localDb.database;
 
-      // Sync order: Profiles -> Log Entries -> Media
+      // Sync order: Profiles -> Companies -> Log Entries -> Media
       // We pull first then push to maintain "Cloud wins" strategy
       await _syncTable(db, 'profiles', 'profiles');
+      await _syncTable(db, 'companies', 'companies');
 
       // Prioritize current user profile sync to local DB
       final user = _supabase.auth.currentUser;
@@ -78,12 +79,12 @@ class SyncService {
 
   Future<void> _syncTable(Database db, String localTable, String remoteTable) async {
     try {
-      // 1. Pull changes from Cloud (Incremental) - "Cloud wins"
+      // 1. Pull changes from Cloud (Incremental)
       final lastSyncResult = await db.rawQuery('SELECT MAX(updated_at) as last_sync FROM $localTable');
       final String? lastSync = lastSyncResult.first['last_sync']?.toString();
 
       var query = _supabase.from(remoteTable).select();
-      if (lastSync != null && lastSync.isNotEmpty) {
+      if (lastSync != null && lastSync.isNotEmpty && lastSync != 'null') {
         query = query.gt('updated_at', lastSync);
       }
 
@@ -91,15 +92,45 @@ class SyncService {
 
       for (var remoteRecord in remoteRecords) {
         try {
-          final Map<String, dynamic> data = Map<String, dynamic>.from(remoteRecord);
-          data['is_dirty'] = 0;
-          data['is_deleted'] = 0;
+          final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord);
+          final String id = remoteData['id'].toString();
 
-          await db.insert(
-            localTable,
-            data,
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+          // Check for local version to perform conflict resolution/merging
+          final localResult = await db.query(localTable, where: 'id = ?', whereArgs: [id]);
+
+          if (localResult.isNotEmpty) {
+            final Map<String, dynamic> localData = Map<String, dynamic>.from(localResult.first);
+            final bool isLocalDirty = localData['is_dirty'] == 1;
+
+            if (isLocalDirty) {
+              // Conflict resolution: Latest updated_at wins, but merge fields
+              final DateTime localUpdated = DateTime.parse(localData['updated_at'].toString());
+              final DateTime remoteUpdated = DateTime.parse(remoteData['updated_at'].toString());
+
+              if (remoteUpdated.isAfter(localUpdated)) {
+                // Cloud is newer: Merge remote into local, but keep local-only fields
+                final Map<String, dynamic> mergedData = {...localData, ...remoteData};
+                mergedData['is_dirty'] = 0; // Cloud version accepted
+                mergedData['is_deleted'] = remoteData['is_deleted'] ?? 0;
+                await db.update(localTable, mergedData, where: 'id = ?', whereArgs: [id]);
+              } else {
+                // Local is newer or equal: Keep local dirty, will push later
+                print('Local version of $id is newer or equal. Keeping local changes.');
+              }
+            } else {
+              // Local is not dirty: Safe to overwrite with remote data
+              final Map<String, dynamic> data = {...remoteData};
+              data['is_dirty'] = 0;
+              data['is_deleted'] = remoteData['is_deleted'] ?? 0;
+              await db.update(localTable, data, where: 'id = ?', whereArgs: [id]);
+            }
+          } else {
+            // New record from remote
+            final Map<String, dynamic> data = {...remoteData};
+            data['is_dirty'] = 0;
+            data['is_deleted'] = remoteData['is_deleted'] ?? 0;
+            await db.insert(localTable, data);
+          }
         } catch (e) {
           print('Failed to pull record to $localTable: $e');
         }
@@ -113,15 +144,20 @@ class SyncService {
           final Map<String, dynamic> data = Map<String, dynamic>.from(record);
           final String id = data['id'].toString();
 
-          data.remove('is_dirty');
-          final bool isDeleted = data['is_deleted'] == 1;
-          data.remove('is_deleted');
+          // Prepare data for Supabase (remove local-only columns)
+          final Map<String, dynamic> pushData = Map.from(data);
+          pushData.remove('is_dirty');
+          final bool isDeleted = pushData['is_deleted'] == 1;
+          pushData.remove('is_deleted');
+
+          // Remove other potential local-only fields if any (e.g., local_path in media)
+          pushData.remove('local_path');
 
           if (isDeleted) {
             await _supabase.from(remoteTable).delete().eq('id', id);
             await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
           } else {
-            await _supabase.from(remoteTable).upsert(data);
+            await _supabase.from(remoteTable).upsert(pushData);
             await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
           }
         } catch (e) {

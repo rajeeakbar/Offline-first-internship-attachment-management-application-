@@ -4,6 +4,7 @@ CREATE TABLE public.profiles (
   full_name TEXT,
   role TEXT CHECK (role IN ('student', 'academic_supervisor', 'industry_supervisor', 'admin')),
   supervisor_id UUID REFERENCES public.profiles(id),
+  industry_supervisor_id UUID REFERENCES public.profiles(id),
   department TEXT,
   student_id_number TEXT,
   company_name TEXT,
