@@ -106,20 +106,68 @@ class RootNavigation extends ConsumerStatefulWidget {
 }
 
 class _RootNavigationState extends ConsumerState<RootNavigation> {
+  bool _isInitializing = true;
+  String? _resolvedRole;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider).startAutoSync();
-    });
+    _initializeUser();
+  }
+
+  Future<void> _initializeUser() async {
+    final syncService = ref.read(syncServiceProvider);
+
+    // Start sync immediately
+    syncService.startAutoSync();
+
+    // Attempt to resolve role from metadata first
+    final user = ref.read(currentUserProvider);
+    String? role = user?.userMetadata?['role'];
+
+    // If not in metadata, check the profiles table (local or remote)
+    if (role == null && user != null) {
+      try {
+        final response = await Supabase.instance.client
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (response != null) {
+          role = response['role'];
+        }
+      } catch (e) {
+        debugPrint('Error fetching role: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _resolvedRole = role ?? 'student';
+        _isInitializing = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
-    final role = user?.userMetadata?['role'] ?? 'student';
+    if (_isInitializing) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Setting up your workspace...'),
+            ],
+          ),
+        ),
+      );
+    }
 
-    switch (role) {
+    switch (_resolvedRole) {
       case 'student':
         return const StudentDashboard();
       case 'academic_supervisor':

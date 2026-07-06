@@ -39,6 +39,13 @@ class SyncService {
       // Sync order: Profiles -> Log Entries -> Media
       // We pull first then push to maintain "Cloud wins" strategy
       await _syncTable(db, 'profiles', 'profiles');
+
+      // Prioritize current user profile sync to local DB
+      final user = _supabase.auth.currentUser;
+      if (user != null) {
+        await _pullSpecificProfile(db, user.id);
+      }
+
       await _syncTable(db, 'log_entries', 'log_entries');
       await _syncMedia(db);
 
@@ -52,6 +59,20 @@ class SyncService {
       }
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  Future<void> _pullSpecificProfile(Database db, String userId) async {
+    try {
+      final remoteRecord = await _supabase.from('profiles').select().eq('id', userId).maybeSingle();
+      if (remoteRecord != null) {
+        final Map<String, dynamic> data = Map<String, dynamic>.from(remoteRecord);
+        data['is_dirty'] = 0;
+        data['is_deleted'] = 0;
+        await db.insert('profiles', data, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    } catch (e) {
+      print('Failed to pull specific profile: $e');
     }
   }
 

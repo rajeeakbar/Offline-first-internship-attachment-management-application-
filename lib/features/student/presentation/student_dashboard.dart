@@ -4,6 +4,7 @@ import 'package:internship_app/features/auth/data/auth_repository.dart';
 import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
 import 'package:internship_app/features/student/presentation/log_entry_form.dart';
+import 'package:internship_app/core/services/providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 class StudentDashboard extends ConsumerStatefulWidget {
@@ -27,14 +28,46 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    final db = await LocalDatabase.instance.database;
-    final results =
-        await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+    try {
+      // 1. Check local database first
+      final db = await LocalDatabase.instance.database;
+      final localResults =
+          await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
 
-    if (results.isNotEmpty && results.first['supervisor_id'] != null) {
-      setState(() => _isAllocated = true);
+      if (localResults.isNotEmpty && localResults.first['supervisor_id'] != null) {
+        if (mounted) {
+          setState(() {
+            _isAllocated = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // 2. If not found locally, try fetching from Supabase directly
+      // This handles the case where sync hasn't finished yet
+      final remoteProfile = await sb.Supabase.instance.client
+          .from('profiles')
+          .select('supervisor_id')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (remoteProfile != null && remoteProfile['supervisor_id'] != null) {
+        if (mounted) {
+          setState(() {
+            _isAllocated = true;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('Error checking allocation status: $e');
     }
-    setState(() => _isLoading = false);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -87,7 +120,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Recent Activities',
+                  'Your Weekly Logs',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
@@ -197,24 +230,117 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 
   Widget _buildEmptyLogsPlaceholder(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 40),
-      alignment: Alignment.center,
-      child: Column(
-        children: [
-          Icon(
-            Icons.assignment_outlined,
-            size: 64,
-            color: theme.colorScheme.onSurface.withOpacity(0.1),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No logs submitted yet',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.grey[500],
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _getLogsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final logs = snapshot.data ?? [];
+
+        if (logs.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            alignment: Alignment.center,
+            child: Column(
+              children: [
+                Icon(
+                  Icons.assignment_outlined,
+                  size: 64,
+                  color: theme.colorScheme.onSurface.withOpacity(0.1),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No logs submitted yet',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: logs.length > 5 ? 5 : logs.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final log = logs[index];
+            return Card(
+              margin: EdgeInsets.zero,
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Day\n${log['day_number']}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  log['work_description'] ?? 'No description',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                subtitle: Text(log['date']?.toString().split('T')[0] ?? ''),
+                trailing: _getStatusChip(log['status'] ?? 'pending', theme),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Stream<List<Map<String, dynamic>>> _getLogsStream() async* {
+    final user = ref.read(currentUserProvider);
+    if (user == null) {
+      yield [];
+      return;
+    }
+
+    final db = await LocalDatabase.instance.database;
+    while (true) {
+      final results = await db.query(
+        'log_entries',
+        where: 'student_id = ?',
+        whereArgs: [user.id],
+        orderBy: 'date DESC'
+      );
+      yield results;
+      await Future.delayed(const Duration(seconds: 5)); // Poll every 5 seconds for local changes
+    }
+  }
+
+  Widget _getStatusChip(String status, ThemeData theme) {
+    Color color;
+    switch (status) {
+      case 'approved': color = Colors.green; break;
+      case 'submitted': color = Colors.orange; break;
+      default: color = Colors.grey;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -241,20 +367,26 @@ class _SupervisorSelectionScreenState
   bool _isSearching = false;
 
   Future<void> _searchStaff(String query) async {
-    setState(() => _isSearching = true);
+    setState(() {
+      _isSearching = true;
+      _staffList = [];
+    });
     final supabase = sb.Supabase.instance.client;
 
     try {
-      final results = await supabase
-          .from('profiles')
-          .select()
-          .inFilter('role', ['academic_supervisor', 'industry_supervisor'])
-          .ilike('full_name', '%$query%');
+      final queryBuilder = supabase.from('profiles').select();
 
-      setState(() {
-        _staffList = List<Map<String, dynamic>>.from(results);
-        _isSearching = false;
-      });
+      final results = await queryBuilder
+          .or('role.eq.academic_supervisor,role.eq.industry_supervisor')
+          .ilike('full_name', '%$query%')
+          .order('full_name');
+
+      if (mounted) {
+        setState(() {
+          _staffList = List<Map<String, dynamic>>.from(results);
+          _isSearching = false;
+        });
+      }
     } catch (e) {
       setState(() => _isSearching = false);
       if (mounted) {
@@ -282,12 +414,19 @@ class _SupervisorSelectionScreenState
 
       await sb.Supabase.instance.client
           .from('profiles')
-          .update({'supervisor_id': staff['id']})
+          .update({
+            'supervisor_id': staff['id'],
+            'updated_at': now,
+          })
           .eq('id', user.id);
 
+      // Trigger a sync to make sure everything is aligned
+      ref.read(syncServiceProvider).syncData();
+
       if (mounted) {
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const StudentDashboard()),
+          (route) => false,
         );
       }
     } catch (e) {
