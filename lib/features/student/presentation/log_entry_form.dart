@@ -43,10 +43,21 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     final logId = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
 
+    // Calculate day number based on previous logs
+    final lastLog = await db.query(
+      'log_entries',
+      where: 'student_id = ?',
+      whereArgs: [user.id],
+      orderBy: 'day_number DESC',
+      limit: 1,
+    );
+    final int nextDayNumber = (lastLog.isNotEmpty ? (lastLog.first['day_number'] as int? ?? 0) : 0) + 1;
+
     // 1. Save Log Entry
     await db.insert('log_entries', {
       'id': logId,
-      'student_id': user!.id,
+      'student_id': user.id,
+      'day_number': nextDayNumber,
       'date': now,
       'work_description': _workController.text,
       'knowledge_acquired': _knowledgeController.text,
