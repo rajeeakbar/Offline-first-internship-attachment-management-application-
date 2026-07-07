@@ -27,7 +27,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
   Future<void> _checkAllocationStatus() async {
     final user = ref.read(currentUserProvider);
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
 
     try {
       // 1. Check local database first
@@ -35,14 +38,17 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       final localResults =
           await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
 
-      if (localResults.isNotEmpty && localResults.first['supervisor_id'] != null) {
-        if (mounted) {
-          setState(() {
-            _isAllocated = true;
-            _isLoading = false;
-          });
+      if (localResults.isNotEmpty) {
+        final profile = localResults.first;
+        if (profile['supervisor_id'] != null) {
+          if (mounted) {
+            setState(() {
+              _isAllocated = true;
+              _isLoading = false;
+            });
+          }
+          return;
         }
-        return;
       }
 
       // 2. If not found locally, try fetching from Supabase directly with timeout

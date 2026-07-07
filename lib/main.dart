@@ -158,22 +158,28 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
             return const StudentDashboard();
         }
       },
-      loading: () => const Scaffold(
+      loading: () => Scaffold(
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Setting up your workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
-              SizedBox(height: 24),
-              Padding(
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Setting up your workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 24),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'This may take a moment on slow connections. If it takes too long, try restarting the app or checking your internet.',
+                  'This may take a moment on slow connections. If it takes too long, try checking your internet or sign out and try again.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
+              ),
+              const SizedBox(height: 32),
+              TextButton.icon(
+                onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Cancel & Sign Out'),
               ),
             ],
           ),

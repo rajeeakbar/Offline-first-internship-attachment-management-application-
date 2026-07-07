@@ -62,11 +62,14 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _loadData,
+              onRefresh: () async {
+                await _loadData();
+                await ref.read(syncServiceProvider).syncData();
+              },
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: _students.length,
-                separatorBuilder: (_, __) => const Divider(),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final student = _students[index];
                   final currentSupervisorId = student['supervisor_id'];
@@ -90,14 +93,14 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                         trailing: DropdownButton<String>(
                           underline: const SizedBox(),
                           hint: const Text('Select Staff'),
-                      value: currentSupervisorId,
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('None')),
-                        ..._academicSupervisors.map((s) => DropdownMenuItem(
-                          value: s['id'] as String,
-                          child: Text(s['full_name'] ?? 'Staff'),
-                        )),
-                      ],
+                          value: currentSupervisorId,
+                          items: [
+                            const DropdownMenuItem(value: null, child: Text('None')),
+                            ..._academicSupervisors.map((s) => DropdownMenuItem(
+                              value: s['id'] as String,
+                              child: Text(s['full_name'] ?? 'Staff'),
+                            )),
+                          ],
                           onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
                         ),
                       ),

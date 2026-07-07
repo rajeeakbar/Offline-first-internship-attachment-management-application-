@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/providers.dart';
 
 class CompletionMetricsScreen extends ConsumerStatefulWidget {
   const CompletionMetricsScreen({super.key});
@@ -66,8 +67,18 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
       appBar: AppBar(title: const Text('Completion Metrics')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _metrics.isEmpty
-              ? const Center(child: Text('No student data available.'))
+          : RefreshIndicator(
+              onRefresh: () async {
+                await _calculateMetrics();
+                await ref.read(syncServiceProvider).syncData();
+              },
+              child: _metrics.isEmpty
+              ? ListView(
+                  children: const [
+                    SizedBox(height: 100),
+                    Center(child: Text('No student data available.')),
+                  ],
+                )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _metrics.length,
@@ -106,6 +117,7 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                     );
                   },
                 ),
+            ),
     );
   }
 }

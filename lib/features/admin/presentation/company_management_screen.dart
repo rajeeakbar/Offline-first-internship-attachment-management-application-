@@ -112,9 +112,19 @@ class _CompanyManagementScreenState extends ConsumerState<CompanyManagementScree
       appBar: AppBar(title: const Text('Company Profiles')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _companies.isEmpty
-            ? const Center(child: Text('No companies registered yet.'))
-            : ListView.builder(
+          : RefreshIndicator(
+              onRefresh: () async {
+                await _loadCompanies();
+                await ref.read(syncServiceProvider).syncData();
+              },
+              child: _companies.isEmpty
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 100),
+                      Center(child: Text('No companies registered yet.')),
+                    ],
+                  )
+                : ListView.builder(
                 padding: const EdgeInsets.all(8),
                 itemCount: _companies.length,
                 itemBuilder: (context, index) {
@@ -141,6 +151,7 @@ class _CompanyManagementScreenState extends ConsumerState<CompanyManagementScree
                   );
                 },
               ),
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showCompanyDialog(),
         child: const Icon(Icons.add),

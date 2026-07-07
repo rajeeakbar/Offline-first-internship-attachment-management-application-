@@ -24,10 +24,12 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   }
 
   // 1. Yield from metadata immediately to prevent UI hang
+  // Check multiple possible keys for role and name
+  final metadata = user.userMetadata ?? {};
   yield {
     'id': user.id,
-    'full_name': user.userMetadata?['full_name'],
-    'role': user.userMetadata?['role'],
+    'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
+    'role': metadata['role'] ?? 'student', // Default to student to at least show a dashboard
   };
 
   // 2. We want to yield the local profile whenever it changes
@@ -56,16 +58,23 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
         yield null;
       }
     } catch (e) {
-      yield null;
+      print('Remote profile fetch error: $e');
     }
   }
 
   // Periodic poll for changes (poor man's stream for SQLite)
+  // Limited to a few retries or a specific condition if needed, but for now 2s is fine.
+  // We use a try-catch to prevent the stream from dying on DB errors.
   while (true) {
-    await Future.delayed(const Duration(seconds: 2));
-    final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-    if (results.isNotEmpty) {
-      yield results.first;
+    try {
+      await Future.delayed(const Duration(seconds: 2));
+      final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+      if (results.isNotEmpty) {
+        yield results.first;
+      }
+    } catch (e) {
+      print('Database polling error: $e');
+      await Future.delayed(const Duration(seconds: 5));
     }
   }
 });
