@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -33,6 +33,36 @@ class LocalDatabase {
       await db.execute('DROP TABLE IF EXISTS log_entries');
       await db.execute('DROP TABLE IF EXISTS media_attachments');
       await _createDB(db, newVersion);
+    } else if (oldVersion < 3) {
+      // Ensure new tables are created for existing users on version 2
+      const uuidType = 'TEXT PRIMARY KEY';
+      const textType = 'TEXT NOT NULL';
+      const boolType = 'INTEGER NOT NULL';
+      const timestampType = 'TEXT NOT NULL';
+      const nullableTextType = 'TEXT';
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS companies (
+          id $uuidType,
+          name $textType,
+          address $nullableTextType,
+          contact_person $nullableTextType,
+          email $nullableTextType,
+          updated_at $timestampType,
+          is_dirty $boolType,
+          is_deleted $boolType
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id TEXT PRIMARY KEY,
+          key TEXT UNIQUE,
+          value TEXT,
+          updated_at $timestampType,
+          is_dirty $boolType
+        )
+      ''');
     }
   }
 
