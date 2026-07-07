@@ -77,8 +77,11 @@ class _CompanyManagementScreenState extends ConsumerState<CompanyManagementScree
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Company Name')),
+              const SizedBox(height: 12),
               TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Official Email')),
+              const SizedBox(height: 12),
               TextField(controller: addressController, decoration: const InputDecoration(labelText: 'Physical Address')),
+              const SizedBox(height: 12),
               TextField(controller: contactPersonController, decoration: const InputDecoration(labelText: 'Contact Person')),
             ],
           ),

@@ -32,6 +32,7 @@ class InternshipApp extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return MaterialApp(
+      key: ValueKey(ref.watch(currentUserProvider)?.id ?? 'unauthenticated'),
       title: 'Internship Management',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

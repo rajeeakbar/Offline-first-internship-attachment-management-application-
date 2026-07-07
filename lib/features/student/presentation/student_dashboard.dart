@@ -29,9 +29,6 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    // Invalidate profile to get fresh data
-    ref.invalidate(userProfileProvider);
-
     try {
       // 1. Check local database first
       final db = await LocalDatabase.instance.database;
