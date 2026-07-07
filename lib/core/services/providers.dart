@@ -23,7 +23,14 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
     return;
   }
 
-  // We want to yield the local profile whenever it changes
+  // 1. Yield from metadata immediately to prevent UI hang
+  yield {
+    'id': user.id,
+    'full_name': user.userMetadata?['full_name'],
+    'role': user.userMetadata?['role'],
+  };
+
+  // 2. We want to yield the local profile whenever it changes
   final db = await ref.read(databaseProvider.future);
 
   // Initial check

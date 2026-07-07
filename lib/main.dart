@@ -125,8 +125,24 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
 
     return profileAsync.when(
       data: (profile) {
-        // Fallback to metadata if profile record is still syncing
-        final role = profile?['role'] ?? user?.userMetadata?['role'] ?? 'student';
+        // Use local DB role, fallback to auth metadata
+        final role = profile?['role'] ?? user?.userMetadata?['role'];
+
+        if (role == null) {
+          // If still null, wait for loading
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Fetching profile details...', style: TextStyle(fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          );
+        }
 
         switch (role) {
           case 'student':
