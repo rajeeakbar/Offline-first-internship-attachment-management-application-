@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -33,8 +33,11 @@ class LocalDatabase {
       await db.execute('DROP TABLE IF EXISTS log_entries');
       await db.execute('DROP TABLE IF EXISTS media_attachments');
       await _createDB(db, newVersion);
-    } else if (oldVersion < 3) {
-      // Ensure new tables are created for existing users on version 2
+      return; // Re-creation covers everything
+    }
+
+    if (oldVersion < 4) {
+      // Ensure new tables are created for existing users on versions 2 or 3
       const uuidType = 'TEXT PRIMARY KEY';
       const textType = 'TEXT NOT NULL';
       const boolType = 'INTEGER NOT NULL';
