@@ -74,16 +74,34 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                   itemBuilder: (context, index) {
                     final item = _metrics[index];
                     return Card(
-                      child: ListTile(
-                        title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('Logs: ${item['total_logs']} total, ${item['approved_logs']} approved'),
-                        trailing: Column(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4.0),
+                        child: ListTile(
+                          title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 4),
+                              Text('Logs: ${item['total_logs']} total, ${item['approved_logs']} approved'),
+                              const SizedBox(height: 8),
+                              LinearProgressIndicator(
+                                value: (int.tryParse(item['goal'].toString()) ?? 1) > 0
+                                  ? (item['approved_logs'] / item['goal'])
+                                  : 0,
+                                backgroundColor: Colors.grey[200],
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.indigo),
+                              ),
+                            ],
+                          ),
+                          trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text('${item['percentage']}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                             Text('Goal: ${item['goal']}', style: const TextStyle(fontSize: 10)),
                           ],
                         ),
+                      ),
                       ),
                     );
                   },

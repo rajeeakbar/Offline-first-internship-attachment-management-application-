@@ -51,8 +51,8 @@ class MainDrawer extends ConsumerWidget {
             leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
             onTap: () {
-              Navigator.pop(context);
               ref.read(authRepositoryProvider).signOut();
+              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
             },
           ),
           const Spacer(),

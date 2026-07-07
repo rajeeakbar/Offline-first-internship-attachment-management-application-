@@ -71,19 +71,25 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                   final student = _students[index];
                   final currentSupervisorId = student['supervisor_id'];
 
-                  return ListTile(
-                    title: Text(student['full_name'] ?? 'Unknown Student', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('ID: ${student['student_id_number'] ?? "N/A"}'),
-                        const SizedBox(height: 8),
-                        const Text('Assign Academic Supervisor:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                      ],
-                    ),
-                    isThreeLine: true,
-                    trailing: DropdownButton<String>(
-                      hint: const Text('Select Staff'),
+                  return Card(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                      child: ListTile(
+                        title: Text(student['full_name'] ?? 'Unknown Student', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 4),
+                            Text('ID: ${student['student_id_number'] ?? "N/A"}'),
+                            const SizedBox(height: 12),
+                            const Text('Assign Academic Supervisor:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo)),
+                            const SizedBox(height: 4),
+                          ],
+                        ),
+                        isThreeLine: true,
+                        trailing: DropdownButton<String>(
+                          underline: const SizedBox(),
+                          hint: const Text('Select Staff'),
                       value: currentSupervisorId,
                       items: [
                         const DropdownMenuItem(value: null, child: Text('None')),
@@ -92,7 +98,9 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                           child: Text(s['full_name'] ?? 'Staff'),
                         )),
                       ],
-                      onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
+                          onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
+                        ),
+                      ),
                     ),
                   );
                 },

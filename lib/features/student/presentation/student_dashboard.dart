@@ -45,13 +45,17 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         return;
       }
 
-      // 2. If not found locally, try fetching from Supabase directly
+      // 2. If not found locally, try fetching from Supabase directly with timeout
       // This handles the case where sync hasn't finished yet
       final remoteProfile = await sb.Supabase.instance.client
           .from('profiles')
           .select('supervisor_id')
           .eq('id', user.id)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 5), onTimeout: () {
+            debugPrint('Remote allocation check timed out');
+            return null;
+          });
 
       if (remoteProfile != null && remoteProfile['supervisor_id'] != null) {
         if (mounted) {

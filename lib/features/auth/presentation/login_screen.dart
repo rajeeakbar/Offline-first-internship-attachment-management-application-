@@ -36,6 +36,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
       // Explicitly invalidate profile provider to ensure fresh data for RootNavigation
       ref.invalidate(userProfileProvider);
+
+      // Ensure the navigation stack is completely cleared
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

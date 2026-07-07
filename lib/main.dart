@@ -166,6 +166,15 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
               CircularProgressIndicator(),
               SizedBox(height: 16),
               Text('Setting up your workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
+              SizedBox(height: 24),
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'This may take a moment on slow connections. If it takes too long, try restarting the app or checking your internet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
             ],
           ),
         ),
