@@ -36,10 +36,11 @@ class SyncService {
     try {
       final db = await _localDb.database;
 
-      // Sync order: Profiles -> Companies -> Log Entries -> Media
+      // Sync order: Profiles -> Companies -> Settings -> Log Entries -> Media
       // We pull first then push to maintain "Cloud wins" strategy
       await _syncTable(db, 'profiles', 'profiles');
       await _syncTable(db, 'companies', 'companies');
+      await _syncTable(db, 'app_settings', 'app_settings');
 
       // Prioritize current user profile sync to local DB
       final user = _supabase.auth.currentUser;

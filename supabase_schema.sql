@@ -101,6 +101,27 @@ CREATE POLICY "Admins can manage companies" ON public.companies
     )
   );
 
--- 9. Storage Buckets
+-- 9. App Settings Table
+CREATE TABLE public.app_settings (
+  id TEXT PRIMARY KEY,
+  key TEXT UNIQUE,
+  value TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Settings are viewable by everyone" ON public.app_settings
+  FOR SELECT USING (true);
+
+CREATE POLICY "Admins can manage settings" ON public.app_settings
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- 10. Storage Buckets
 -- Run this in the Supabase Dashboard:
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('logs', 'logs', true);

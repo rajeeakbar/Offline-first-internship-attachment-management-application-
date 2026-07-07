@@ -22,6 +22,10 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
   Future<void> _calculateMetrics() async {
     final db = await LocalDatabase.instance.database;
 
+    // Get required logs goal from settings
+    final settingsResult = await db.query('app_settings', where: 'key = ?', whereArgs: ['required_logs']);
+    final int logGoal = settingsResult.isNotEmpty ? (int.tryParse(settingsResult.first['value'].toString()) ?? 60) : 60;
+
     // Get all students
     final students = await db.query('profiles', where: 'role = ?', whereArgs: ['student']);
 
@@ -37,12 +41,15 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
         [student['id'], 'approved']
       );
 
+      final int approved = approvedCountResult.first['approved'] as int? ?? 0;
+
       stats.add({
         'name': student['full_name'] ?? 'Unknown',
         'total_logs': logCountResult.first['total'] ?? 0,
-        'approved_logs': approvedCountResult.first['approved'] ?? 0,
-        'percentage': (logCountResult.first['total'] as int) > 0
-            ? ((approvedCountResult.first['approved'] as int) / 60 * 100).toStringAsFixed(1)
+        'approved_logs': approved,
+        'goal': logGoal,
+        'percentage': logGoal > 0
+            ? (approved / logGoal * 100).toStringAsFixed(1)
             : "0.0",
       });
     }
@@ -74,7 +81,7 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text('${item['percentage']}%', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
-                            const Text('Goal: 60', style: TextStyle(fontSize: 10)),
+                            Text('Goal: ${item['goal']}', style: const TextStyle(fontSize: 10)),
                           ],
                         ),
                       ),
