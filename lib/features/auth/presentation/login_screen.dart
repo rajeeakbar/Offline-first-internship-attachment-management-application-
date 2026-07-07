@@ -130,7 +130,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           obscureText: _obscurePassword,
                         ),
-                        const SizedBox(height: 24),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _showForgotPasswordDialog,
+                            child: const Text('Forgot Password?'),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         _isLoading
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
@@ -172,6 +179,53 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showForgotPasswordDialog() {
+    final resetEmailController = TextEditingController(text: _emailController.text);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Enter your email address to receive a password reset link.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: resetEmailController,
+              decoration: const InputDecoration(labelText: 'Email Address'),
+              keyboardType: TextInputType.emailAddress,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              final email = resetEmailController.text.trim();
+              if (email.isEmpty) return;
+              try {
+                await ref.read(authRepositoryProvider).resetPassword(email);
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password reset link sent to your email.')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Send Reset Link'),
+          ),
+        ],
       ),
     );
   }

@@ -14,7 +14,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _studentIdController = TextEditingController();
   String _selectedRole = 'student';
+  String _selectedLevel = 'Level 100';
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -23,6 +25,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     'academic_supervisor',
     'industry_supervisor',
     'admin',
+  ];
+
+  final List<String> _levels = [
+    'Level 100',
+    'Level 200',
+    'Level 300',
+    'Level 400',
+    'Post-Grad',
   ];
 
   Future<void> _signup() async {
@@ -35,6 +45,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text.trim(),
             fullName: _fullNameController.text.trim(),
             role: _selectedRole,
+            studentId: _selectedRole == 'student' ? _studentIdController.text.trim() : null,
+            level: _selectedRole == 'student' ? _selectedLevel : null,
           );
       if (mounted) {
         String message = 'Signup successful!';
@@ -174,6 +186,36 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             if (value != null) setState(() => _selectedRole = value);
                           },
                         ),
+                        if (_selectedRole == 'student') ...[
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _studentIdController,
+                            decoration: const InputDecoration(
+                              labelText: 'School Student ID',
+                              prefixIcon: Icon(Icons.badge_outlined),
+                            ),
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'Please enter your school ID'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            value: _selectedLevel,
+                            decoration: const InputDecoration(
+                              labelText: 'Current Level',
+                              prefixIcon: Icon(Icons.layers_outlined),
+                            ),
+                            items: _levels.map((level) {
+                              return DropdownMenuItem(
+                                value: level,
+                                child: Text(level),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value != null) setState(() => _selectedLevel = value);
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -221,6 +263,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _studentIdController.dispose();
     super.dispose();
   }
 }

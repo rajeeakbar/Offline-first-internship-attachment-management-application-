@@ -149,7 +149,11 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _createNewLogEntry(),
+        onPressed: () => _createNewLogEntry().then((_) {
+          // Manual refresh fallback
+          setState(() {});
+          _checkAllocationStatus();
+        }),
         backgroundColor: theme.colorScheme.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -185,12 +189,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      '12 of 60 days completed',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
+                    _buildDynamicProgressText(theme),
                   ],
                 ),
                 Container(
@@ -357,10 +356,36 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
-  void _createNewLogEntry() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => LogEntryForm()),
-    ).then((_) => setState(() {})); // Refresh status if needed
+  Widget _buildDynamicProgressText(ThemeData theme) {
+    return FutureBuilder<int>(
+      future: _getApprovedLogCount(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        return Text(
+          '$count of 60 days completed',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<int> _getApprovedLogCount() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return 0;
+    final db = await LocalDatabase.instance.database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
+      [user.id, 'approved']
+    );
+    return result.first['total'] as int? ?? 0;
+  }
+
+  Future<void> _createNewLogEntry() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const LogEntryForm()),
+    );
   }
 }
 

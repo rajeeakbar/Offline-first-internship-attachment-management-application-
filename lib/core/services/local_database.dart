@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -36,8 +36,17 @@ class LocalDatabase {
       return;
     }
 
-    // Explicitly create tables if they were missed in version 2, 3, or 4
-    if (oldVersion < 5) {
+    if (oldVersion < 6) {
+      // Add level column to profiles
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN level TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+    }
+
+    // Explicitly create tables if they were missed in version 2, 3, 4, or 5
+    if (oldVersion < 6) {
       const uuidType = 'TEXT PRIMARY KEY';
       const textType = 'TEXT NOT NULL';
       const boolType = 'INTEGER NOT NULL';
@@ -86,6 +95,7 @@ class LocalDatabase {
         industry_supervisor_id $nullableTextType,
         department $nullableTextType,
         student_id_number $nullableTextType,
+        level $nullableTextType,
         company_name $nullableTextType,
         status $nullableTextType,
         updated_at $timestampType,

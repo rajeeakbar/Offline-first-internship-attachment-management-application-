@@ -7,6 +7,7 @@ CREATE TABLE public.profiles (
   industry_supervisor_id UUID REFERENCES public.profiles(id),
   department TEXT,
   student_id_number TEXT,
+  level TEXT,
   company_name TEXT,
   status TEXT DEFAULT 'pending',
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

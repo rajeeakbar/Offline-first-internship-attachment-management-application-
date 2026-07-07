@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import 'dart:io';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
+import '../../../core/services/ai_service.dart';
 import '../../auth/data/auth_repository.dart';
 
 class LogEntryForm extends ConsumerStatefulWidget {
@@ -19,12 +20,34 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
   final _workController = TextEditingController();
   final _knowledgeController = TextEditingController();
   File? _selectedImage;
+  bool _isRefining = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() => _selectedImage = File(pickedFile.path));
+    }
+  }
+
+  Future<void> _refineText() async {
+    final text = _workController.text.trim();
+    if (text.isEmpty) return;
+
+    setState(() => _isRefining = true);
+    try {
+      final refined = await ref.read(aiServiceProvider).refineLog(text);
+      setState(() {
+        _workController.text = refined;
+        _isRefining = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Log entry professionalized by AI Bot ✨')),
+        );
+      }
+    } catch (e) {
+      setState(() => _isRefining = false);
     }
   }
 
@@ -99,11 +122,34 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            TextFormField(
-              controller: _workController,
-              decoration: const InputDecoration(labelText: 'Description of Work Done'),
-              maxLines: 5,
-              validator: (val) => val!.isEmpty ? 'Required' : null,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: _workController,
+                  decoration: InputDecoration(
+                    labelText: 'Description of Work Done',
+                    hintText: 'e.g. I fixed some bugs today...',
+                    suffixIcon: _isRefining
+                      ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : IconButton(
+                          icon: const Icon(Icons.auto_awesome, color: Colors.indigo),
+                          onPressed: _refineText,
+                          tooltip: 'Professionalize with AI',
+                        ),
+                  ),
+                  maxLines: 5,
+                  validator: (val) => val!.isEmpty ? 'Required' : null,
+                ),
+                if (!_isRefining)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Tip: Tap the ✨ icon to professionalize your vocabulary.',
+                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -129,5 +175,12 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _workController.dispose();
+    _knowledgeController.dispose();
+    super.dispose();
   }
 }

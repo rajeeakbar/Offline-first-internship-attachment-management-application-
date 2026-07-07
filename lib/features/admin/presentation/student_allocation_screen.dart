@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 
 class StudentAllocationScreen extends ConsumerStatefulWidget {
@@ -45,7 +46,17 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
   Future<void> _assignAcademicSupervisor(String studentId, String? supervisorId) async {
     final supabase = Supabase.instance.client;
     try {
+      // Update remote
       await supabase.from('profiles').update({'supervisor_id': supervisorId}).eq('id', studentId);
+
+      // Update local to ensure immediate UI feedback
+      final db = await LocalDatabase.instance.database;
+      await db.update('profiles', {
+        'supervisor_id': supervisorId,
+        'is_dirty': 0, // Mark clean because we just pushed to cloud
+        'updated_at': DateTime.now().toIso8601String(),
+      }, where: 'id = ?', whereArgs: [studentId]);
+
       _loadData();
       ref.read(syncServiceProvider).syncData();
     } catch (e) {

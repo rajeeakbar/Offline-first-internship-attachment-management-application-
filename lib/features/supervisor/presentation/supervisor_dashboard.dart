@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 import '../../../core/services/main_drawer.dart';
@@ -30,8 +31,12 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
 
     final db = await LocalDatabase.instance.database;
 
-    final results = await db
-        .query('profiles', where: 'supervisor_id = ?', whereArgs: [user.id]);
+    // Filter by either academic or industry supervisor ID depending on current user context
+    final results = await db.query(
+      'profiles',
+      where: widget.isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
+      whereArgs: [user.id]
+    );
 
     setState(() {
       _assignedStudents = results;
@@ -112,7 +117,17 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                                         fontWeight: FontWeight.bold),
                                   ),
                                   subtitle: const Text('5 Pending Logs Approval'),
-                                  trailing: const Icon(Icons.chevron_right),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent, size: 20),
+                                        onPressed: () => _confirmUnassignStudent(student),
+                                        tooltip: 'Unassign Student',
+                                      ),
+                                      const Icon(Icons.chevron_right),
+                                    ],
+                                  ),
                                   onTap: () => _viewStudentLogs(student),
                                 ),
                               );
@@ -142,12 +157,26 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
           children: [
             _statItem(theme, 'Students', _assignedStudents.length.toString(),
                 Icons.people_outline),
-            _statItem(theme, 'Pending', '12', Icons.pending_actions_outlined),
-            _statItem(theme, 'Avg. Grade', 'B+', Icons.grade_outlined),
+            FutureBuilder<int>(
+              future: _getPendingCount(),
+              builder: (context, snapshot) => _statItem(theme, 'Pending', (snapshot.data ?? 0).toString(), Icons.pending_actions_outlined),
+            ),
+            _statItem(theme, 'Role', widget.isAcademic ? 'ACAD' : 'IND', Icons.badge_outlined),
           ],
         ),
       ),
     );
+  }
+
+  Future<int> _getPendingCount() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return 0;
+    final db = await LocalDatabase.instance.database;
+    final results = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM log_entries WHERE supervisor_id = ? AND status = ?',
+      [user.id, 'submitted']
+    );
+    return results.first['total'] as int? ?? 0;
   }
 
   Widget _statItem(ThemeData theme, String label, String value, IconData icon) {
@@ -170,6 +199,51 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         ),
       ],
     );
+  }
+
+  void _confirmUnassignStudent(Map<String, dynamic> student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unassign Student?'),
+        content: Text('Are you sure you want to remove ${student['full_name']} from your list? They will need to select a new supervisor.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              await _unassignStudent(student['id']);
+              if (mounted) Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('Remove Student'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _unassignStudent(String studentId) async {
+    final db = await LocalDatabase.instance.database;
+    final now = DateTime.now().toIso8601String();
+
+    // Update local
+    await db.update('profiles', {
+      widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
+      'updated_at': now,
+      'is_dirty': 1,
+    }, where: 'id = ?', whereArgs: [studentId]);
+
+    // Update remote
+    await sb.Supabase.instance.client
+        .from('profiles')
+        .update({
+          widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
+          'updated_at': now,
+        })
+        .eq('id', studentId);
+
+    _loadAssignedStudents();
+    ref.read(syncServiceProvider).syncData();
   }
 
   void _viewStudentLogs(Map<String, dynamic> student) {

@@ -34,6 +34,14 @@ class InternshipApp extends ConsumerWidget {
     return MaterialApp(
       key: ValueKey(ref.watch(currentUserProvider)?.id ?? 'unauthenticated'),
       title: 'Internship Management',
+      initialRoute: '/',
+      routes: {
+        '/': (context) => authState.when(
+          data: (session) => session.session != null ? const RootNavigation() : const LoginScreen(),
+          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (error, stack) => Scaffold(body: Center(child: Text('Error: $error'))),
+        ),
+      },
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -79,20 +87,6 @@ class InternshipApp extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-        ),
-      ),
-      home: authState.when(
-        data: (session) {
-          if (session.session != null) {
-            return const RootNavigation();
-          }
-          return const LoginScreen();
-        },
-        loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
-        error: (error, stack) => Scaffold(
-          body: Center(child: Text('Error: $error')),
         ),
       ),
     );

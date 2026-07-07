@@ -23,13 +23,20 @@ class AuthRepository {
     required String password,
     required String fullName,
     required String role,
+    String? studentId,
+    String? level,
   }) async {
     try {
       print('Attempting signup for $email');
       final response = await _client.auth.signUp(
         email: email,
         password: password,
-        data: {'full_name': fullName, 'role': role},
+        data: {
+          'full_name': fullName,
+          'role': role,
+          if (studentId != null) 'student_id_number': studentId,
+          if (level != null) 'level': level,
+        },
       );
 
       if (response.user != null) {
@@ -39,6 +46,8 @@ class AuthRepository {
           'id': response.user!.id,
           'full_name': fullName,
           'role': role,
+          'student_id_number': studentId,
+          'level': level,
           'status': 'pending',
           'updated_at': DateTime.now().toIso8601String(),
         });
@@ -93,5 +102,14 @@ class AuthRepository {
 
   Future<void> signOut() async {
     await _client.auth.signOut();
+  }
+
+  Future<void> resetPassword(String email) async {
+    try {
+      await _client.auth.resetPasswordForEmail(email);
+    } catch (e) {
+      print('Password reset error: $e');
+      rethrow;
+    }
   }
 }
