@@ -1,15 +1,8 @@
-import java.util.properties
-
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-}
-
-val localproperties = properties().apply{
-    val file = rootProject.file("local.properties")
-    if (file.exists()) load(file.inputStream())
 }
 
 android {
@@ -35,14 +28,8 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        buildConfigField("String","https://pbxumeocnpqqtiwlvrhm.supabase.co","\"${localproperties.getProperty("supabase.url")}\"")
-        buildConfigField("String","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBieHVtZW9jbnBxcXRpd2x2cmhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNzM4MzYsImV4cCI6MjA5ODc0OTgzNn0.IZhJoMKUUYTnUuUCnJOnQiyhSUGcTSnExLWeqoC1NMc","\"${localproperties.getProperty("supabase.anon_key")}\"")
     }
 
-    buildFeatures{
-        buildConfig = true
-    }
 
     buildTypes {
         release {
@@ -55,18 +42,4 @@ android {
 
 flutter {
     source = "../.."
-}
-dependencies {
-    // ... your existing dependencies
-
-    // Supabase BOM (manages versions for all supabase modules)
-    implementation(platform("io.github.jan-tennert.supabase:bom:3.0.0")) // Check for latest version on GitHub
-
-    // Core Postgrest (for Database operations)
-    implementation("io.github.jan-tennert.supabase:postgrest-kt")
-
-    // Optional: Add these if you need them
-    // implementation("io.github.jan-tennert.supabase:auth-kt") // For Authentication
-    // implementation("io.github.jan-tennert.supabase:realtime-kt") // For Realtime subscriptions
-    // implementation("io.github.jan-tennert.supabase:storage-kt") // For File storage
 }
