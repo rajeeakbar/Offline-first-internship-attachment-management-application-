@@ -34,25 +34,6 @@ class InternshipApp extends ConsumerWidget {
     return MaterialApp(
       key: ValueKey(ref.watch(currentUserProvider)?.id ?? 'unauthenticated'),
       title: 'Internship Management',
-      initialRoute: '/',
-      routes: {
-        '/': (context) => authState.when(
-          data: (session) => session.session != null ? const RootNavigation() : const LoginScreen(),
-          loading: () => const Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Authenticating...', style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            ),
-          ),
-          error: (error, stack) => Scaffold(body: Center(child: Text('Auth Error: $error'))),
-        ),
-      },
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -98,6 +79,29 @@ class InternshipApp extends ConsumerWidget {
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
+        ),
+      ),
+      home: authState.when(
+        data: (session) {
+          if (session.session != null) {
+            return const RootNavigation();
+          }
+          return const LoginScreen();
+        },
+        loading: () => const Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Authenticating...', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        ),
+        error: (error, stack) => Scaffold(
+          body: Center(child: Text('Auth Error: $error')),
         ),
       ),
     );
@@ -175,7 +179,7 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'This may take a moment on slow connections. If it takes too long, check your internet or try signing out.',
+                  'This may take a moment on slow connections. If it takes too long, check your internet or sign out.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),

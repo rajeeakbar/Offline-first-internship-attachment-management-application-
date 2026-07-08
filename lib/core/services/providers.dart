@@ -66,19 +66,33 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   }
 
   // Periodic poll for changes (poor man's stream for SQLite)
-  // Limited to a few retries or a specific condition if needed, but for now 2s is fine.
-  // We use a try-catch to prevent the stream from dying on DB errors.
+  // Reduced frequency to 5s to be more battery efficient.
+  Map<String, dynamic>? lastEmitted;
+
   while (true) {
     try {
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 5));
       final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
       if (results.isNotEmpty) {
         final Map<String, dynamic> localData = {...initialProfile, ...results.first};
-        yield localData;
+
+        // Only yield if data actually changed to prevent rebuild loops
+        if (lastEmitted == null || _mapChanged(lastEmitted, localData)) {
+          lastEmitted = localData;
+          yield localData;
+        }
       }
     } catch (e) {
       print('Database polling error: $e');
-      await Future.delayed(const Duration(seconds: 5));
+      await Future.delayed(const Duration(seconds: 10));
     }
   }
 });
+
+bool _mapChanged(Map<String, dynamic> a, Map<String, dynamic> b) {
+  if (a.length != b.length) return true;
+  for (final key in a.keys) {
+    if (a[key] != b[key]) return true;
+  }
+  return false;
+}

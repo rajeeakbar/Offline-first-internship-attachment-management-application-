@@ -33,6 +33,8 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       return;
     }
 
+    print('Checking allocation for student ${user.id}...');
+
     try {
       // 1. Check local database first
       final db = await LocalDatabase.instance.database;
