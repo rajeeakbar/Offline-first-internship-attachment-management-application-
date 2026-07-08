@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../auth/data/auth_repository.dart';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/providers.dart';
+import '../../../core/services/main_drawer.dart';
+import 'student_allocation_screen.dart';
+import 'company_management_screen.dart';
+import 'completion_metrics_screen.dart';
+import 'system_settings_screen.dart';
+import 'registration_approval_screen.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -13,6 +20,7 @@ class AdminDashboard extends ConsumerStatefulWidget {
 class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   int _studentCount = 0;
   int _supervisorCount = 0;
+  int _pendingCount = 0;
 
   @override
   void initState() {
@@ -28,10 +36,18 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         where: 'role IN (?, ?)',
         whereArgs: ['academic_supervisor', 'industry_supervisor']);
 
-    setState(() {
-      _studentCount = students.length;
-      _supervisorCount = supervisors.length;
-    });
+    // Also check remote for real-time pending registrations
+    try {
+      final pendingResult = await ref.read(authRepositoryProvider).getPendingCount();
+      if (mounted) setState(() => _pendingCount = pendingResult);
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _studentCount = students.length;
+        _supervisorCount = supervisors.length;
+      });
+    }
   }
 
   @override
@@ -42,6 +58,64 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Institution Admin'),
+
+      ),
+      drawer: const MainDrawer(),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await ref.read(syncServiceProvider).syncData();
+          await _loadStats();
+        },
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              'System Overview',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildSummaryCards(theme),
+            const SizedBox(height: 16),
+            _buildMenuTile(
+              theme,
+              Icons.how_to_reg_rounded,
+              'Registration Approvals',
+              'Review new user accounts',
+              badge: _pendingCount > 0 ? _pendingCount.toString() : null,
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegistrationApprovalScreen()));
+              },
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Management Tools',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
+                'Manage participating companies', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompanyManagementScreen()));
+                }),
+            _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
+                'Match students to supervisors', onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentAllocationScreen()));
+                }),
+            _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
+                'View institution-wide progress', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompletionMetricsScreen()));
+                }),
+            _buildMenuTile(theme, Icons.settings_suggest_rounded,
+                'System Settings', 'Configure attachment parameters', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SystemSettingsScreen()));
+                }),
+          ],
+        ),
+
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded),
@@ -77,6 +151,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
           _buildMenuTile(theme, Icons.settings_suggest_rounded,
               'System Settings', 'Configure attachment parameters'),
         ],
+
       ),
     );
   }
@@ -141,7 +216,11 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildMenuTile(
+
+      ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap, String? badge}) {
+
       ThemeData theme, IconData icon, String title, String subtitle) {
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ListTile(
@@ -154,6 +233,32 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
           ),
           child: Icon(icon, color: theme.colorScheme.primary),
         ),
+
+        title: Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (badge != null)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+        onTap: onTap,
+
         title: Text(
           title,
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -161,6 +266,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
         onTap: () {},
+
       ),
     );
   }

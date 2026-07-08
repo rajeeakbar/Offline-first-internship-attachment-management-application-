@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -33,6 +33,48 @@ class LocalDatabase {
       await db.execute('DROP TABLE IF EXISTS log_entries');
       await db.execute('DROP TABLE IF EXISTS media_attachments');
       await _createDB(db, newVersion);
+      return;
+    }
+
+    if (oldVersion < 6) {
+      // Add level column to profiles
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN level TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+    }
+
+    // Explicitly create tables if they were missed in version 2, 3, 4, or 5
+    if (oldVersion < 6) {
+      const uuidType = 'TEXT PRIMARY KEY';
+      const textType = 'TEXT NOT NULL';
+      const boolType = 'INTEGER NOT NULL';
+      const timestampType = 'TEXT NOT NULL';
+      const nullableTextType = 'TEXT';
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS companies (
+          id $uuidType,
+          name $textType,
+          address $nullableTextType,
+          contact_person $nullableTextType,
+          email $nullableTextType,
+          updated_at $timestampType,
+          is_dirty $boolType,
+          is_deleted $boolType
+        )
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS app_settings (
+          id TEXT PRIMARY KEY,
+          key TEXT UNIQUE,
+          value TEXT,
+          updated_at $timestampType,
+          is_dirty $boolType
+        )
+      ''');
     }
   }
 
@@ -50,8 +92,10 @@ class LocalDatabase {
         full_name $nullableTextType,
         role $nullableTextType,
         supervisor_id $nullableTextType,
+        industry_supervisor_id $nullableTextType,
         department $nullableTextType,
         student_id_number $nullableTextType,
+        level $nullableTextType,
         company_name $nullableTextType,
         status $nullableTextType,
         updated_at $timestampType,
@@ -90,6 +134,31 @@ class LocalDatabase {
         updated_at $timestampType,
         is_dirty $boolType,
         is_deleted $boolType
+      )
+    ''');
+
+    // Companies Table
+    await db.execute('''
+      CREATE TABLE companies (
+        id $uuidType,
+        name $textType,
+        address $nullableTextType,
+        contact_person $nullableTextType,
+        email $nullableTextType,
+        updated_at $timestampType,
+        is_dirty $boolType,
+        is_deleted $boolType
+      )
+    ''');
+
+    // App Settings Table
+    await db.execute('''
+      CREATE TABLE app_settings (
+        id TEXT PRIMARY KEY,
+        key TEXT UNIQUE,
+        value TEXT,
+        updated_at $timestampType,
+        is_dirty $boolType
       )
     ''');
   }

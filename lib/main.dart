@@ -32,8 +32,10 @@ class InternshipApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
+    final userId = ref.watch(currentUserProvider)?.id;
 
     return MaterialApp(
+      key: ValueKey(userId ?? 'unauthenticated'),
       title: 'Internship Management',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -90,10 +92,19 @@ class InternshipApp extends ConsumerWidget {
           return const LoginScreen();
         },
         loading: () => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Authenticating...', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
         ),
         error: (error, stack) => Scaffold(
-          body: Center(child: Text('Error: $error')),
+          body: Center(child: Text('Auth Error: $error')),
         ),
       ),
     );
@@ -111,6 +122,12 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
   @override
   void initState() {
     super.initState();
+
+    _startSync();
+  }
+
+  void _startSync() {
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncServiceProvider).startAutoSync();
     });
@@ -118,20 +135,89 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(currentUserProvider);
-    final role = user?.userMetadata?['role'] ?? 'student';
 
-    switch (role) {
-      case 'student':
-        return const StudentDashboard();
-      case 'academic_supervisor':
-        return const SupervisorDashboard(isAcademic: true);
-      case 'industry_supervisor':
-        return const SupervisorDashboard(isAcademic: false);
-      case 'admin':
-        return const AdminDashboard();
-      default:
-        return const StudentDashboard();
-    }
+    final profileAsync = ref.watch(userProfileProvider);
+
+    final user = ref.watch(currentUserProvider);
+
+    return profileAsync.when(
+      data: (profile) {
+        // Use local DB role, fallback to auth metadata
+        final role = profile?['role'] ?? user?.userMetadata?['role'];
+
+        if (role == null) {
+          // If still null, wait for loading
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Fetching profile details...', style: TextStyle(fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+          );
+        }
+
+        switch (role) {
+          case 'student':
+            return const StudentDashboard();
+          case 'academic_supervisor':
+            return const SupervisorDashboard(isAcademic: true);
+          case 'industry_supervisor':
+            return const SupervisorDashboard(isAcademic: false);
+          case 'admin':
+            return const AdminDashboard();
+          default:
+            return const StudentDashboard();
+        }
+      },
+      loading: () => Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Preparing workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 24),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  'This may take a moment on slow connections. If it takes too long, check your internet or sign out.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+              const SizedBox(height: 32),
+              TextButton.icon(
+                onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Cancel & Sign Out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      error: (error, stack) => Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.red, size: 48),
+              const SizedBox(height: 16),
+              Text('Session error: $error'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                child: const Text('Back to Login'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
