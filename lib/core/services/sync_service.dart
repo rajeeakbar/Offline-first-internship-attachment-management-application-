@@ -82,7 +82,8 @@ class SyncService {
     try {
       // 1. Pull changes from Cloud (Incremental)
       final lastSyncResult = await db.rawQuery('SELECT MAX(updated_at) as last_sync FROM $localTable');
-      final String? lastSync = lastSyncResult.first['last_sync']?.toString();
+      final Object? lastSyncVal = lastSyncResult.first['last_sync'];
+      final String? lastSync = lastSyncVal?.toString();
 
       var query = _supabase.from(remoteTable).select();
       if (lastSync != null && lastSync.isNotEmpty && lastSync != 'null') {
@@ -143,7 +144,7 @@ class SyncService {
       for (var record in dirtyRecords) {
         try {
           final Map<String, dynamic> data = Map<String, dynamic>.from(record);
-          final String id = data['id'].toString();
+          final String id = data['id'] as String;
 
           // Prepare data for Supabase (remove local-only columns)
           final Map<String, dynamic> pushData = Map.from(data);
@@ -176,9 +177,9 @@ class SyncService {
 
       for (var media in dirtyMedia) {
         try {
-          final String id = media['id'].toString();
-          final String localPath = media['local_path'].toString();
-          final String logId = media['log_id'].toString();
+          final String id = media['id'] as String;
+          final String localPath = media['local_path'] as String;
+          final String logId = media['log_id'] as String;
 
           if (media['is_deleted'] == 1) {
             await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);

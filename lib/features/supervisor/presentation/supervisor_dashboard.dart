@@ -16,136 +16,122 @@ class SupervisorDashboard extends ConsumerStatefulWidget {
 }
 
 class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
-  List<Map<String, dynamic>> _assignedStudents = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAssignedStudents();
-  }
-
-  Future<void> _loadAssignedStudents() async {
-    final user = ref.read(currentUserProvider);
-    if (user == null) return;
-
-    final db = await LocalDatabase.instance.database;
-
-    // Filter by either academic or industry supervisor ID depending on current user context
-    final results = await db.query(
-      'profiles',
-      where: widget.isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
-      whereArgs: [user.id]
-    );
-
-    setState(() {
-      _assignedStudents = results;
-      _isLoading = false;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final studentsAsync = ref.watch(supervisorStudentsProvider(widget.isAcademic));
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(widget.isAcademic ? 'Academic Portal' : 'Industry Portal'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: () => ref.read(syncServiceProvider).syncData(),
+          ),
+        ],
       ),
       drawer: const MainDrawer(),
       body: RefreshIndicator(
         onRefresh: () async {
           await ref.read(syncServiceProvider).syncData();
-          await _loadAssignedStudents();
         },
-        child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : CustomScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              slivers: [
-                SliverPadding(
-                  padding: const EdgeInsets.all(20),
-                  sliver: SliverToBoxAdapter(
-                    child: _buildStatsOverview(theme),
-                  ),
+        child: studentsAsync.when(
+          data: (students) => CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.all(20),
+                sliver: SliverToBoxAdapter(
+                  child: _buildStatsOverview(theme, students.length),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  sliver: SliverToBoxAdapter(
-                    child: Text(
-                      'Your Assigned Students',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverToBoxAdapter(
+                  child: Text(
+                    'Your Assigned Students',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                const SliverToBoxAdapter(child: SizedBox(height: 16)),
-                _assignedStudents.isEmpty
-                    ? SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Text(
-                            'No students assigned yet.',
-                            style: TextStyle(color: Colors.grey[500]),
-                          ),
-                        ),
-                      )
-                    : SliverPadding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final student = _assignedStudents[index];
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor:
-                                        theme.colorScheme.secondaryContainer,
-                                    child: Text(
-                                      (student['full_name'] as String? ?? 'S')[0]
-                                          .toUpperCase(),
-                                      style: TextStyle(
-                                          color: theme.colorScheme.secondary),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    student['full_name'] ?? 'Unknown Student',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: FutureBuilder<int>(
-                                    future: _getStudentPendingCount(student['id']),
-                                    builder: (context, snapshot) => Text('${snapshot.data ?? 0} Pending Logs Approval'),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent, size: 20),
-                                        onPressed: () => _confirmUnassignStudent(student),
-                                        tooltip: 'Unassign Student',
-                                      ),
-                                      const Icon(Icons.chevron_right),
-                                    ],
-                                  ),
-                                  onTap: () => _viewStudentLogs(student),
-                                ),
-                              );
-                            },
-                            childCount: _assignedStudents.length,
-                          ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              students.isEmpty
+                  ? SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Text(
+                          'No students assigned yet.',
+                          style: TextStyle(color: Colors.grey[500]),
                         ),
                       ),
-              ],
-            ),
+                    )
+                  : SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final student = students[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                leading: CircleAvatar(
+                                  radius: 25,
+                                  backgroundColor: theme.colorScheme.secondaryContainer,
+                                  child: Text(
+                                    (student['full_name'] as String? ?? 'S')[0].toUpperCase(),
+                                    style: TextStyle(color: theme.colorScheme.secondary, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                title: Text(
+                                  student['full_name'] ?? 'Unknown Student',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: FutureBuilder<int>(
+                                  future: _getStudentPendingCount(student['id']),
+                                  builder: (context, snapshot) => Text(
+                                    '${snapshot.data ?? 0} Pending Logs Approval',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent, size: 20),
+                                      onPressed: () => _confirmUnassignStudent(student),
+                                      tooltip: 'Unassign Student',
+                                    ),
+                                    const Icon(Icons.chevron_right),
+                                  ],
+                                ),
+                                onTap: () => _viewStudentLogs(student),
+                              ),
+                            );
+                          },
+                          childCount: students.length,
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Error: $e')),
+        ),
       ),
     );
   }
 
-  Widget _buildStatsOverview(ThemeData theme) {
+  Widget _buildStatsOverview(ThemeData theme, int studentCount) {
     return Card(
       elevation: 0,
       color: theme.colorScheme.primaryContainer.withOpacity(0.2),
@@ -158,8 +144,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _statItem(theme, 'Students', _assignedStudents.length.toString(),
-                Icons.people_outline),
+            _statItem(theme, 'Students', studentCount.toString(), Icons.people_outline),
             FutureBuilder<int>(
               future: _getPendingCount(),
               builder: (context, snapshot) => _statItem(theme, 'Pending', (snapshot.data ?? 0).toString(), Icons.pending_actions_outlined),
@@ -254,7 +239,6 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         })
         .eq('id', studentId);
 
-    _loadAssignedStudents();
     ref.read(syncServiceProvider).syncData();
   }
 
@@ -266,7 +250,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
           isAcademic: widget.isAcademic,
         ),
       ),
-    ).then((_) => _loadAssignedStudents());
+    );
   }
 }
 

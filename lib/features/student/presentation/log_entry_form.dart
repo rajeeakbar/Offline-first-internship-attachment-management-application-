@@ -20,7 +20,8 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
   final _workController = TextEditingController();
   final _knowledgeController = TextEditingController();
   File? _selectedImage;
-  bool _isRefining = false;
+  bool _isRefiningWork = false;
+  bool _isRefiningKnowledge = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -30,24 +31,35 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     }
   }
 
-  Future<void> _refineText() async {
-    final text = _workController.text.trim();
+  Future<void> _refineText(TextEditingController controller, bool isWork) async {
+    final text = controller.text.trim();
     if (text.isEmpty) return;
 
-    setState(() => _isRefining = true);
+    setState(() {
+      if (isWork) _isRefiningWork = true;
+      else _isRefiningKnowledge = true;
+    });
+
     try {
       final refined = await ref.read(aiServiceProvider).refineLog(text);
       setState(() {
-        _workController.text = refined;
-        _isRefining = false;
+        controller.text = refined;
+        if (isWork) _isRefiningWork = false;
+        else _isRefiningKnowledge = false;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Log entry professionalized by AI Bot ✨')),
+          const SnackBar(
+            content: Text('Professionalized by AI Bot ✨'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
-      setState(() => _isRefining = false);
+      setState(() {
+        if (isWork) _isRefiningWork = false;
+        else _isRefiningKnowledge = false;
+      });
     }
   }
 
@@ -107,6 +119,11 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Log submitted successfully (Offline-first)')),
       );
+
+      // Invalidate providers for immediate UI update
+      ref.invalidate(studentLogsProvider(user.id));
+      ref.invalidate(internshipProgressProvider);
+
       // Trigger a sync if possible
       ref.read(syncServiceProvider).syncData();
       Navigator.of(context).pop();
@@ -130,33 +147,35 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
                   decoration: InputDecoration(
                     labelText: 'Description of Work Done',
                     hintText: 'e.g. I fixed some bugs today...',
-                    suffixIcon: _isRefining
+                    suffixIcon: _isRefiningWork
                       ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
                       : IconButton(
                           icon: const Icon(Icons.auto_awesome, color: Colors.indigo),
-                          onPressed: _refineText,
+                          onPressed: () => _refineText(_workController, true),
                           tooltip: 'Professionalize with AI',
                         ),
                   ),
                   maxLines: 5,
                   validator: (val) => val!.isEmpty ? 'Required' : null,
                 ),
-                if (!_isRefining)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      'Tip: Tap the ✨ icon to professionalize your vocabulary.',
-                      style: TextStyle(fontSize: 10, color: Colors.grey[600]),
-                    ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _knowledgeController,
+                  decoration: InputDecoration(
+                    labelText: 'Knowledge/Experience Acquired',
+                    hintText: 'e.g. I learned how to use Flutter...',
+                    suffixIcon: _isRefiningKnowledge
+                      ? const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : IconButton(
+                          icon: const Icon(Icons.auto_awesome, color: Colors.indigo),
+                          onPressed: () => _refineText(_knowledgeController, false),
+                          tooltip: 'Professionalize with AI',
+                        ),
                   ),
+                  maxLines: 3,
+                  validator: (val) => val!.isEmpty ? 'Required' : null,
+                ),
               ],
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _knowledgeController,
-              decoration: const InputDecoration(labelText: 'Knowledge/Experience Acquired'),
-              maxLines: 3,
-              validator: (val) => val!.isEmpty ? 'Required' : null,
             ),
             const SizedBox(height: 20),
             if (_selectedImage != null)

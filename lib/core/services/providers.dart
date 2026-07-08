@@ -23,8 +23,6 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
     return;
   }
 
-  // 1. Yield from metadata immediately to prevent UI hang
-  // Check multiple possible keys for role and name
   final metadata = user.userMetadata ?? {};
   final initialProfile = {
     'id': user.id,
@@ -33,59 +31,97 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   };
   yield initialProfile;
 
-  // 2. We want to yield the local profile whenever it changes
   final db = await ref.read(databaseProvider.future);
-
-  // Initial check
-  final localResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-  if (localResults.isNotEmpty) {
-    final Map<String, dynamic> localData = {...initialProfile, ...localResults.first};
-    yield localData;
-  } else {
-    // If not local, fetch remote and yield it
-    try {
-      final remoteProfile = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-      if (remoteProfile != null) {
-        // Save to local for next time
-        final Map<String, dynamic> data = Map.from(remoteProfile);
-        data['is_dirty'] = 0;
-        data['is_deleted'] = 0;
-        await db.insert('profiles', data, conflictAlgorithm: ConflictAlgorithm.replace);
-        final Map<String, dynamic> localData = {...initialProfile, ...data};
-        yield localData;
-      } else {
-        yield null;
-      }
-    } catch (e) {
-      print('Remote profile fetch error: $e');
-    }
-  }
-
-  // Periodic poll for changes (poor man's stream for SQLite)
-  // Reduced frequency to 5s to be more battery efficient.
-  Map<String, dynamic>? lastEmitted;
 
   while (true) {
     try {
-      await Future.delayed(const Duration(seconds: 5));
       final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
       if (results.isNotEmpty) {
-        final Map<String, dynamic> localData = {...initialProfile, ...results.first};
-
-        // Only yield if data actually changed to prevent rebuild loops
-        if (lastEmitted == null || _mapChanged(lastEmitted, localData)) {
-          lastEmitted = localData;
-          yield localData;
-        }
+        yield {...initialProfile, ...results.first};
       }
     } catch (e) {
       print('Database polling error: $e');
-      await Future.delayed(const Duration(seconds: 10));
     }
+    await Future.delayed(const Duration(seconds: 2));
+  }
+});
+
+final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, studentId) async* {
+  final db = await ref.read(databaseProvider.future);
+
+  while (true) {
+    try {
+      final results = await db.query(
+        'log_entries',
+        where: 'student_id = ?',
+        whereArgs: [studentId],
+        orderBy: 'date DESC',
+      );
+      yield results;
+    } catch (e) {
+      print('Logs query error: $e');
+    }
+    await Future.delayed(const Duration(seconds: 2));
+  }
+});
+
+final currentUserLogsProvider = Provider<AsyncValue<List<Map<String, dynamic>>>>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return const AsyncValue.data([]);
+  return ref.watch(studentLogsProvider(user.id));
+});
+
+final internshipProgressProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    yield {'count': 0, 'goal': 60};
+    return;
+  }
+
+  final db = await ref.read(databaseProvider.future);
+
+  while (true) {
+    try {
+      // Get goal from settings
+      final settings = await db.query('app_settings', where: 'key = ?', whereArgs: ['required_logs']);
+      final goal = settings.isNotEmpty ? (int.tryParse(settings.first['value'].toString()) ?? 60) : 60;
+
+      // Get count of approved logs
+      final result = await db.rawQuery(
+        'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
+        [user.id, 'approved'],
+      );
+      final count = result.first['total'] as int? ?? 0;
+
+      yield {'count': count, 'goal': goal};
+    } catch (e) {
+      print('Progress stream error: $e');
+    }
+    await Future.delayed(const Duration(seconds: 2));
+  }
+});
+
+final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynamic>>, bool>((ref, isAcademic) async* {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    yield [];
+    return;
+  }
+
+  final db = await ref.read(databaseProvider.future);
+
+  while (true) {
+    try {
+      final results = await db.query(
+        'profiles',
+        where: isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
+        whereArgs: [user.id],
+      );
+      yield results;
+    } catch (e) {
+      print('Supervisor students query error: $e');
+    }
+    await Future.delayed(const Duration(seconds: 2));
   }
 });
 

@@ -187,45 +187,88 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final resetEmailController = TextEditingController(text: _emailController.text);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Enter your email address to receive a password reset link.'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: resetEmailController,
-              decoration: const InputDecoration(labelText: 'Email Address'),
-              keyboardType: TextInputType.emailAddress,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          bool isSending = false;
+          String? errorMessage;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text('Reset Password', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Enter your email address to receive a password reset link.'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: resetEmailController,
+                  decoration: InputDecoration(
+                    labelText: 'Email Address',
+                    errorText: errorMessage != null ? 'Rate limit hit' : null,
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                if (errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () async {
-              final email = resetEmailController.text.trim();
-              if (email.isEmpty) return;
-              try {
-                await ref.read(authRepositoryProvider).resetPassword(email);
-                if (mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Password reset link sent to your email.')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Send Reset Link'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: isSending ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSending
+                    ? null
+                    : () async {
+                        final email = resetEmailController.text.trim();
+                        if (email.isEmpty) return;
+
+                        setDialogState(() {
+                          isSending = true;
+                          errorMessage = null;
+                        });
+
+                        try {
+                          await ref.read(authRepositoryProvider).resetPassword(email);
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Password reset link sent to your email.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            setDialogState(() {
+                              isSending = false;
+                              errorMessage = e.toString().contains('over_email_send_rate_limit')
+                                  ? 'Too many requests. Please try again in a minute.'
+                                  : 'Error: $e';
+                            });
+                          }
+                        }
+                      },
+                child: isSending
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Send Reset Link'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

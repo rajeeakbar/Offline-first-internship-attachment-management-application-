@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -9,6 +10,15 @@ class PdfExportService {
     debugPrint('Generating PDF report for student: $studentName');
     final pdf = pw.Document();
     final db = await LocalDatabase.instance.database;
+
+    // Load institution logo
+    pw.ImageProvider? logoImage;
+    try {
+      final ByteData bytes = await rootBundle.load('assets/images/logo.png');
+      logoImage = pw.MemoryImage(bytes.buffer.asUint8List());
+    } catch (e) {
+      debugPrint('Error loading logo for PDF: $e');
+    }
 
     // Fetch student profile details (ID number and Level)
     final profileResult = await db.query('profiles', where: 'id = ?', whereArgs: [studentId]);
@@ -32,18 +42,29 @@ class PdfExportService {
           children: [
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
               children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(schoolName.toUpperCase(), style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
-                    pw.Text('OFFICIAL INDUSTRIAL ATTACHMENT LOGBOOK', style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-                  ],
-                ),
-                pw.Container(
-                  width: 50,
-                  height: 50,
-                  child: pw.PdfLogo(), // Acting as institution logo
+                if (logoImage != null)
+                  pw.Container(
+                    width: 60,
+                    height: 60,
+                    child: pw.Image(logoImage),
+                  )
+                else
+                  pw.Container(width: 60, height: 60, child: pw.PdfLogo()),
+                pw.SizedBox(width: 15),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(schoolName.toUpperCase(),
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold, color: PdfColors.indigo900)),
+                      pw.Text('INDUSTRIAL ATTACHMENT LOGBOOK REPORT',
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                    ],
+                  ),
                 ),
               ],
             ),

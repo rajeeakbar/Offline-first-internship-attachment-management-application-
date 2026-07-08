@@ -17,153 +17,113 @@ class StudentDashboard extends ConsumerStatefulWidget {
 }
 
 class _StudentDashboardState extends ConsumerState<StudentDashboard> {
-  bool _isAllocated = false;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkAllocationStatus();
-  }
-
-  Future<void> _checkAllocationStatus() async {
-    final user = ref.read(currentUserProvider);
-    if (user == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
-    print('Checking allocation for student ${user.id}...');
-
-    try {
-      // 1. Check local database first
-      final db = await LocalDatabase.instance.database;
-      final localResults =
-          await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-
-      if (localResults.isNotEmpty) {
-        final profile = localResults.first;
-        if (profile['supervisor_id'] != null) {
-          if (mounted) {
-            setState(() {
-              _isAllocated = true;
-              _isLoading = false;
-            });
-          }
-          return;
-        }
-      }
-
-      // 2. If not found locally, try fetching from Supabase directly with timeout
-      // This handles the case where sync hasn't finished yet
-      final remoteProfile = await sb.Supabase.instance.client
-          .from('profiles')
-          .select('supervisor_id')
-          .eq('id', user.id)
-          .maybeSingle()
-          .timeout(const Duration(seconds: 5), onTimeout: () {
-            debugPrint('Remote allocation check timed out');
-            return null;
-          });
-
-      if (remoteProfile != null && remoteProfile['supervisor_id'] != null) {
-        if (mounted) {
-          setState(() {
-            _isAllocated = true;
-            _isLoading = false;
-          });
-        }
-        return;
-      }
-    } catch (e) {
-      debugPrint('Error checking allocation status: $e');
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final user = ref.watch(currentUserProvider);
-    final fullName = user?.userMetadata?['full_name'] ?? 'Student';
+    final profileAsync = ref.watch(userProfileProvider);
 
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    return profileAsync.when(
+      data: (profile) {
+        if (profile?['supervisor_id'] == null) {
+          return const SupervisorSelectionScreen();
+        }
 
-    if (!_isAllocated) {
-      return const SupervisorSelectionScreen();
-    }
+        final fullName = profile?['full_name'] ?? 'Student';
 
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Logbook Dashboard'),
-      ),
-      drawer: const MainDrawer(),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          await ref.read(syncServiceProvider).syncData();
-          await _checkAllocationStatus();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Hello, $fullName!',
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary,
-                ),
+        return Scaffold(
+          backgroundColor: theme.colorScheme.surface,
+          appBar: AppBar(
+            title: const Text('Logbook Dashboard'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.sync),
+                onPressed: () => ref.read(syncServiceProvider).syncData(),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Keep track of your internship progress.',
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-              ),
-              const SizedBox(height: 24),
-              _buildSummaryCard(theme),
-              const SizedBox(height: 32),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Your Weekly Logs',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentLogsListScreen()));
-                    },
-                    child: const Text('View All'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _buildEmptyLogsPlaceholder(theme),
             ],
           ),
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _createNewLogEntry().then((_) {
-          // Manual refresh fallback
-          setState(() {});
-          _checkAllocationStatus();
-        }),
-        backgroundColor: theme.colorScheme.primary,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('New Daily Log'),
-      ),
+          drawer: const MainDrawer(),
+          body: RefreshIndicator(
+            onRefresh: () async {
+              await ref.read(syncServiceProvider).syncData();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hello, $fullName!',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Keep track of your internship progress.',
+                              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                      CircleAvatar(
+                        radius: 25,
+                        backgroundColor: theme.colorScheme.primaryContainer,
+                        child: Text(
+                          fullName[0].toUpperCase(),
+                          style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _buildSummaryCard(theme),
+                  const SizedBox(height: 24),
+                  _buildStatsRow(theme),
+                  const SizedBox(height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Your Recent Logs',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const StudentLogsListScreen()),
+                          );
+                        },
+                        child: const Text('View All'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  _buildLogsList(theme),
+                ],
+              ),
+            ),
+          ),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: _createNewLogEntry,
+            backgroundColor: theme.colorScheme.primary,
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('New Daily Log'),
+          ),
+        );
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
     );
   }
 
@@ -237,16 +197,11 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
-  Widget _buildEmptyLogsPlaceholder(ThemeData theme) {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _getLogsStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+  Widget _buildLogsList(ThemeData theme) {
+    final logsAsync = ref.watch(currentUserLogsProvider);
 
-        final logs = snapshot.data ?? [];
-
+    return logsAsync.when(
+      data: (logs) {
         if (logs.isEmpty) {
           return Container(
             padding: const EdgeInsets.symmetric(vertical: 40),
@@ -279,18 +234,25 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
             final log = logs[index];
             return Card(
               margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+              ),
               child: ListTile(
+                contentPadding: const EdgeInsets.all(12),
                 leading: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 50,
+                  height: 50,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'Day\n${log['day_number']}',
-                    textAlign: TextAlign.center,
+                    '${log['day_number']}',
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                       color: theme.colorScheme.primary,
                     ),
@@ -302,42 +264,91 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
-                subtitle: Text(log['date']?.toString().split('T')[0] ?? ''),
+                subtitle: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    log['date']?.toString().split('T')[0] ?? '',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                ),
                 trailing: _getStatusChip(log['status'] ?? 'pending', theme),
               ),
             );
           },
         );
       },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Error: $e')),
     );
   }
 
-  Stream<List<Map<String, dynamic>>> _getLogsStream() async* {
-    final user = ref.read(currentUserProvider);
-    if (user == null) {
-      yield [];
-      return;
-    }
+  Widget _buildStatsRow(ThemeData theme) {
+    final logsAsync = ref.watch(currentUserLogsProvider);
 
-    final db = await LocalDatabase.instance.database;
-    while (true) {
-      final results = await db.query(
-        'log_entries',
-        where: 'student_id = ?',
-        whereArgs: [user.id],
-        orderBy: 'date DESC'
-      );
-      yield results;
-      await Future.delayed(const Duration(seconds: 5)); // Poll every 5 seconds for local changes
-    }
+    return logsAsync.when(
+      data: (logs) {
+        final approved = logs.where((l) => l['status'] == 'approved').length;
+        final pending = logs.where((l) => l['status'] == 'submitted' || l['status'] == 'pending').length;
+        final rejected = logs.where((l) => l['status'] == 'rejected').length;
+
+        return Row(
+          children: [
+            _statBox(theme, 'Approved', approved.toString(), Colors.green),
+            const SizedBox(width: 12),
+            _statBox(theme, 'Pending', pending.toString(), Colors.orange),
+            const SizedBox(width: 12),
+            _statBox(theme, 'Rejected', rejected.toString(), Colors.red),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _statBox(ThemeData theme, String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.1)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(fontSize: 10, color: Colors.grey[600], fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _getStatusChip(String status, ThemeData theme) {
     Color color;
     switch (status) {
-      case 'approved': color = Colors.green; break;
-      case 'submitted': color = Colors.orange; break;
-      default: color = Colors.grey;
+      case 'approved':
+        color = Colors.green;
+        break;
+      case 'submitted':
+        color = Colors.orange;
+        break;
+      case 'rejected':
+        color = Colors.red;
+        break;
+      default:
+        color = Colors.grey;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -354,12 +365,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 
   Widget _buildDynamicProgressBar(ThemeData theme) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getProgressData(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {'count': 0, 'goal': 60};
+    final progressAsync = ref.watch(internshipProgressProvider);
+    return progressAsync.when(
+      data: (data) {
         final double progress = (data['count'] as int) / (data['goal'] as int);
-
         return ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: LinearProgressIndicator(
@@ -370,41 +379,23 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           ),
         );
       },
+      loading: () => const LinearProgressIndicator(minHeight: 10),
+      error: (_, __) => const SizedBox(height: 10),
     );
   }
 
   Widget _buildDynamicProgressText(ThemeData theme) {
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _getProgressData(),
-      builder: (context, snapshot) {
-        final data = snapshot.data ?? {'count': 0, 'goal': 60};
-        return Text(
-          '${data['count']} of ${data['goal']} days completed',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        );
-      },
+    final progressAsync = ref.watch(internshipProgressProvider);
+    return progressAsync.when(
+      data: (data) => Text(
+        '${data['count']} of ${data['goal']} days completed',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      loading: () => const Text('Loading...'),
+      error: (_, __) => const Text('Error loading progress'),
     );
-  }
-
-  Future<Map<String, dynamic>> _getProgressData() async {
-    final user = ref.read(currentUserProvider);
-    if (user == null) return {'count': 0, 'goal': 60};
-    final db = await LocalDatabase.instance.database;
-
-    // Get goal
-    final settings = await db.query('app_settings', where: 'key = ?', whereArgs: ['required_logs']);
-    final goal = settings.isNotEmpty ? (int.tryParse(settings.first['value'].toString()) ?? 60) : 60;
-
-    // Get count
-    final result = await db.rawQuery(
-      'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
-      [user.id, 'approved']
-    );
-    final count = result.first['total'] as int? ?? 0;
-
-    return {'count': count, 'goal': goal};
   }
 
   Future<void> _createNewLogEntry() async {
@@ -439,6 +430,7 @@ class _SupervisorSelectionScreenState
   }
 
   Future<void> _searchStaff(String query) async {
+    if (!mounted) return;
     setState(() {
       _isSearching = true;
       _staffList = [];
@@ -460,8 +452,8 @@ class _SupervisorSelectionScreenState
         });
       }
     } catch (e) {
-      setState(() => _isSearching = false);
       if (mounted) {
+        setState(() => _isSearching = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Search failed: $e')),
         );
@@ -473,7 +465,6 @@ class _SupervisorSelectionScreenState
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    // Determine if we are selecting academic or industry
     final isIndustry = staff['role'] == 'industry_supervisor';
 
     setState(() => _isSearching = true);
@@ -495,7 +486,6 @@ class _SupervisorSelectionScreenState
           })
           .eq('id', user.id);
 
-      // Trigger a sync to make sure everything is aligned
       ref.read(syncServiceProvider).syncData();
 
       if (mounted) {
@@ -505,8 +495,8 @@ class _SupervisorSelectionScreenState
         );
       }
     } catch (e) {
-      setState(() => _isSearching = false);
       if (mounted) {
+        setState(() => _isSearching = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Selection failed: $e')),
         );

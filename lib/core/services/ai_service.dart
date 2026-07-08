@@ -29,14 +29,33 @@ class AIService {
     };
 
     corrections.forEach((key, value) {
-      refined = refined.replaceAll(RegExp(key, caseSensitive: false), value);
+      refined = refined.replaceAll(RegExp('\\b$key\\b', caseSensitive: false), value);
     });
 
-    // Add a professional opening/closing if it looks like a short note
-    if (refined.split(' ').length < 10) {
-      refined = 'During today\'s session, $refined, ensuring all tasks met the expected standards.';
+    // Sentence casing and punctuation check
+    if (refined.isNotEmpty) {
+      refined = refined[0].toUpperCase() + refined.substring(1);
+      if (!refined.endsWith('.') && !refined.endsWith('!') && !refined.endsWith('?')) {
+        refined += '.';
+      }
+    }
+
+    // Context-aware prefixing for very short entries
+    if (refined.split(' ').length < 5) {
+      final hour = DateTime.now().hour;
+      final timeContext = hour < 12 ? 'morning' : (hour < 17 ? 'afternoon' : 'evening');
+      refined = 'During this $timeContext, I successfully $refined';
     }
 
     return refined;
+  }
+
+  Future<String> generateWeeklySummary(List<Map<String, dynamic>> logs) async {
+    await Future.delayed(const Duration(seconds: 3));
+    if (logs.isEmpty) return 'No progress recorded this week.';
+
+    final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
+
+    return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved in system implementation and professional development.';
   }
 }
