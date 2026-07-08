@@ -210,15 +210,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               ],
             ),
             const SizedBox(height: 24),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: 0.2,
-                minHeight: 10,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
-                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-              ),
-            ),
+            _buildDynamicProgressBar(theme),
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: () {
@@ -359,13 +351,33 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
-  Widget _buildDynamicProgressText(ThemeData theme) {
-    return FutureBuilder<int>(
-      future: _getApprovedLogCount(),
+  Widget _buildDynamicProgressBar(ThemeData theme) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getProgressData(),
       builder: (context, snapshot) {
-        final count = snapshot.data ?? 0;
+        final data = snapshot.data ?? {'count': 0, 'goal': 60};
+        final double progress = (data['count'] as int) / (data['goal'] as int);
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: LinearProgressIndicator(
+            value: progress.clamp(0.0, 1.0),
+            minHeight: 10,
+            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDynamicProgressText(ThemeData theme) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _getProgressData(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? {'count': 0, 'goal': 60};
         return Text(
-          '$count of 60 days completed',
+          '${data['count']} of ${data['goal']} days completed',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -374,15 +386,23 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
-  Future<int> _getApprovedLogCount() async {
+  Future<Map<String, dynamic>> _getProgressData() async {
     final user = ref.read(currentUserProvider);
-    if (user == null) return 0;
+    if (user == null) return {'count': 0, 'goal': 60};
     final db = await LocalDatabase.instance.database;
+
+    // Get goal
+    final settings = await db.query('app_settings', where: 'key = ?', whereArgs: ['required_logs']);
+    final goal = settings.isNotEmpty ? (int.tryParse(settings.first['value'].toString()) ?? 60) : 60;
+
+    // Get count
     final result = await db.rawQuery(
       'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
       [user.id, 'approved']
     );
-    return result.first['total'] as int? ?? 0;
+    final count = result.first['total'] as int? ?? 0;
+
+    return {'count': count, 'goal': goal};
   }
 
   Future<void> _createNewLogEntry() async {

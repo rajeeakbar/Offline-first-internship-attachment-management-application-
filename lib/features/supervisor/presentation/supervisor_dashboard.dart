@@ -116,7 +116,10 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold),
                                   ),
-                                  subtitle: const Text('5 Pending Logs Approval'),
+                                  subtitle: FutureBuilder<int>(
+                                    future: _getStudentPendingCount(student['id']),
+                                    builder: (context, snapshot) => Text('${snapshot.data ?? 0} Pending Logs Approval'),
+                                  ),
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
@@ -166,6 +169,15 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         ),
       ),
     );
+  }
+
+  Future<int> _getStudentPendingCount(String studentId) async {
+    final db = await LocalDatabase.instance.database;
+    final results = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
+      [studentId, 'submitted']
+    );
+    return results.first['total'] as int? ?? 0;
   }
 
   Future<int> _getPendingCount() async {
