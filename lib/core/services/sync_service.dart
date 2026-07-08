@@ -74,6 +74,18 @@ class SyncService {
         await db.insert('profiles', data, conflictAlgorithm: ConflictAlgorithm.replace);
       }
     } catch (e) {
+      // Fallback: If level column missing, remove it from the data and retry
+      if (e.toString().contains('column "level" does not exist')) {
+        try {
+          final remoteRecord = await _supabase.from('profiles').select('id, full_name, role, supervisor_id, industry_supervisor_id, department, student_id_number, company_name, status, updated_at').eq('id', userId).maybeSingle();
+          if (remoteRecord != null) {
+            final Map<String, dynamic> data = Map<String, dynamic>.from(remoteRecord);
+            data['is_dirty'] = 0;
+            data['is_deleted'] = 0;
+            await db.insert('profiles', data, conflictAlgorithm: ConflictAlgorithm.replace);
+          }
+        } catch (_) {}
+      }
       print('Failed to pull specific profile: $e');
     }
   }
@@ -90,11 +102,21 @@ class SyncService {
         query = query.gt('updated_at', lastSync);
       }
 
-      final List<dynamic> remoteRecords = await query;
+      List<dynamic> remoteRecords = [];
+      try {
+        remoteRecords = await query;
+      } catch (e) {
+        if (e.toString().contains('column "level" does not exist') && remoteTable == 'profiles') {
+          // Fallback for missing level column in older schemas
+          remoteRecords = await _supabase.from(remoteTable).select('id, full_name, role, supervisor_id, industry_supervisor_id, department, student_id_number, company_name, status, updated_at');
+        } else {
+          rethrow;
+        }
+      }
 
       for (var remoteRecord in remoteRecords) {
         try {
-          final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord);
+          final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord as Map);
           final String id = remoteData['id'].toString();
 
           // Check for local version to perform conflict resolution/merging
@@ -106,8 +128,11 @@ class SyncService {
 
             if (isLocalDirty) {
               // Conflict resolution: Latest updated_at wins, but merge fields
-              final DateTime localUpdated = DateTime.parse(localData['updated_at'].toString());
-              final DateTime remoteUpdated = DateTime.parse(remoteData['updated_at'].toString());
+              final String localUpdatedStr = localData['updated_at']?.toString() ?? DateTime.now().toIso8601String();
+              final String remoteUpdatedStr = remoteData['updated_at']?.toString() ?? DateTime.now().toIso8601String();
+
+              final DateTime localUpdated = DateTime.parse(localUpdatedStr);
+              final DateTime remoteUpdated = DateTime.parse(remoteUpdatedStr);
 
               if (remoteUpdated.isAfter(localUpdated)) {
                 // Cloud is newer: Merge remote into local, but keep local-only fields
@@ -144,7 +169,7 @@ class SyncService {
       for (var record in dirtyRecords) {
         try {
           final Map<String, dynamic> data = Map<String, dynamic>.from(record);
-          final String id = data['id'] as String;
+          final String id = data['id'].toString();
 
           // Prepare data for Supabase (remove local-only columns)
           final Map<String, dynamic> pushData = Map.from(data);
@@ -159,7 +184,16 @@ class SyncService {
             await _supabase.from(remoteTable).delete().eq('id', id);
             await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
           } else {
-            await _supabase.from(remoteTable).upsert(pushData);
+            try {
+              await _supabase.from(remoteTable).upsert(pushData);
+            } catch (e) {
+              if (e.toString().contains('column "level" does not exist') && remoteTable == 'profiles') {
+                pushData.remove('level');
+                await _supabase.from(remoteTable).upsert(pushData);
+              } else {
+                rethrow;
+              }
+            }
             await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
           }
         } catch (e) {

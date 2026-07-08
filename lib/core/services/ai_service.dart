@@ -3,48 +3,69 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final aiServiceProvider = Provider((ref) => AIService());
 
 class AIService {
-  /// Simulates an AI refinement of log text.
-  /// In a real app, this would call an OpenAI, Anthropic, or Supabase Edge Function.
-  Future<String> refineLog(String input) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 2));
+  String? _geminiApiKey;
 
+  /// Update the API key for Gemini integration
+  void setApiKey(String key) {
+    _geminiApiKey = key;
+  }
+
+  /// Simulates an AI refinement of log text.
+  /// If _geminiApiKey is set, it would ideally call the Google Generative AI API.
+  Future<String> refineLog(String input) async {
     if (input.trim().isEmpty) return input;
 
-    // A simple mock "professionalization" for demonstration
-    // In a real scenario, this is where the LLM prompt would go
-    String refined = input.trim();
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 1500));
 
-    // Simple heuristic improvements for common phrases
-    final corrections = {
-      'i did': 'I performed',
-      'i made': 'I developed',
-      'i saw': 'I observed',
-      'fixed': 'resolved',
-      'worked on': 'collaborated on the implementation of',
-      'helped': 'assisted in',
-      'learned': 'acquired proficiency in',
-      'good': 'effective',
-      'bad': 'suboptimal',
-    };
-
-    corrections.forEach((key, value) {
-      refined = refined.replaceAll(RegExp('\\b$key\\b', caseSensitive: false), value);
-    });
-
-    // Sentence casing and punctuation check
-    if (refined.isNotEmpty) {
-      refined = refined[0].toUpperCase() + refined.substring(1);
-      if (!refined.endsWith('.') && !refined.endsWith('!') && !refined.endsWith('?')) {
-        refined += '.';
-      }
+    if (_geminiApiKey != null && _geminiApiKey!.isNotEmpty) {
+      // TODO: Implement actual google_generative_ai call here
+      // For now, we still use the enhanced heuristic but signal Gemini readiness
+      print('Gemini API Key detected. Readiness for Google AI established.');
     }
 
-    // Context-aware prefixing for very short entries
-    if (refined.split(' ').length < 5) {
-      final hour = DateTime.now().hour;
-      final timeContext = hour < 12 ? 'morning' : (hour < 17 ? 'afternoon' : 'evening');
-      refined = 'During this $timeContext, I successfully $refined';
+    String refined = input.trim();
+
+    // Sophisticated professional mapping
+    final Map<String, String> corrections = {
+      r'\bi did\b': 'I successfully executed',
+      r'\bi made\b': 'I engineered',
+      r'\bi saw\b': 'I observed and analyzed',
+      r'\bfixed\b': 'rectified and optimized',
+      r'\bworked on\b': 'contributed to the development of',
+      r'\bhelped\b': 'collaborated with the team on',
+      r'\blearned\b': 'gained specialized expertise in',
+      r'\bgood\b': 'exemplary',
+      r'\bbad\b': 'non-optimal',
+      r'\bsetup\b': 'configured and deployed',
+      r'\btold them\b': 'communicated to the stakeholders',
+      r'\bstarted\b': 'initiated the deployment of',
+      r'\bchecked\b': 'conducted a thorough verification of',
+      r'\bcode\b': 'source code architecture',
+      r'\bbugs\b': 'technical inconsistencies',
+    };
+
+    corrections.forEach((pattern, value) {
+      refined = refined.replaceAll(RegExp(pattern, caseSensitive: false), value);
+    });
+
+    // Advanced Sentence Structuring
+    List<String> sentences = refined.split(RegExp(r'(?<=[.!?])\s+'));
+    sentences = sentences.map((s) {
+      if (s.isEmpty) return s;
+      String processed = s.trim();
+      processed = processed[0].toUpperCase() + processed.substring(1);
+      if (!RegExp(r'[.!?]$').hasMatch(processed)) {
+        processed += '.';
+      }
+      return processed;
+    }).toList();
+
+    refined = sentences.join(' ');
+
+    // Contextual Enhancement for Professionalism
+    if (refined.split(' ').length < 6) {
+      refined = 'Actively participated in operational tasks where $refined';
     }
 
     return refined;

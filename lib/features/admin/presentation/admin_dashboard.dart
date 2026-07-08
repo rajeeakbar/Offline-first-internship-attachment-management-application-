@@ -8,6 +8,7 @@ import 'student_allocation_screen.dart';
 import 'company_management_screen.dart';
 import 'completion_metrics_screen.dart';
 import 'system_settings_screen.dart';
+import 'registration_approval_screen.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -19,6 +20,7 @@ class AdminDashboard extends ConsumerStatefulWidget {
 class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   int _studentCount = 0;
   int _supervisorCount = 0;
+  int _pendingCount = 0;
 
   @override
   void initState() {
@@ -34,10 +36,18 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         where: 'role IN (?, ?)',
         whereArgs: ['academic_supervisor', 'industry_supervisor']);
 
-    setState(() {
-      _studentCount = students.length;
-      _supervisorCount = supervisors.length;
-    });
+    // Also check remote for real-time pending registrations
+    try {
+      final pendingResult = await ref.read(authRepositoryProvider).getPendingCount();
+      if (mounted) setState(() => _pendingCount = pendingResult);
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _studentCount = students.length;
+        _supervisorCount = supervisors.length;
+      });
+    }
   }
 
   @override
@@ -67,6 +77,17 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             ),
             const SizedBox(height: 16),
             _buildSummaryCards(theme),
+            const SizedBox(height: 16),
+            _buildMenuTile(
+              theme,
+              Icons.how_to_reg_rounded,
+              'Registration Approvals',
+              'Review new user accounts',
+              badge: _pendingCount > 0 ? _pendingCount.toString() : null,
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegistrationApprovalScreen()));
+              },
+            ),
             const SizedBox(height: 32),
             Text(
               'Management Tools',
@@ -157,7 +178,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildMenuTile(
-      ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap}) {
+      ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap, String? badge}) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ListTile(
@@ -170,9 +191,26 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
           ),
           child: Icon(icon, color: theme.colorScheme.primary),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (badge != null)
+              Container(
+                margin: const EdgeInsets.only(left: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge,
+                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+          ],
         ),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),

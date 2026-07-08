@@ -33,14 +33,20 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
 
   final db = await ref.read(databaseProvider.future);
 
+  // Use a database listener if possible, otherwise keep polling but with a trigger mechanism
+  // For now, let's keep polling but ensure it starts immediately
   while (true) {
     try {
       final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
       if (results.isNotEmpty) {
         yield {...initialProfile, ...results.first};
+      } else {
+        // Yield initial profile if DB doesn't have it yet to keep UI responsive
+        yield initialProfile;
       }
     } catch (e) {
       print('Database polling error: $e');
+      yield initialProfile;
     }
     await Future.delayed(const Duration(seconds: 2));
   }

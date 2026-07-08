@@ -34,8 +34,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             email: email,
             password: password,
           );
-      // Explicitly invalidate profile provider to ensure fresh data for RootNavigation
+
+      // Force a refresh of all relevant providers
       ref.invalidate(userProfileProvider);
+      ref.invalidate(currentUserLogsProvider);
+      ref.invalidate(internshipProgressProvider);
 
       // Ensure the navigation stack is completely cleared
       if (mounted) {
@@ -130,13 +133,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           obscureText: _obscurePassword,
                         ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _showForgotPasswordDialog,
-                            child: const Text('Forgot Password?'),
-                          ),
-                        ),
                         const SizedBox(height: 12),
                         _isLoading
                             ? const CircularProgressIndicator()
@@ -155,22 +151,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Column(
                   children: [
-                    Text(
-                      'Don\'t have an account?',
-                      style: TextStyle(color: Colors.grey[600]),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Don\'t have an account?',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (context) => const SignupScreen()),
+                            );
+                          },
+                          child: const Text(
+                            'Create Account',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => const SignupScreen()),
-                        );
-                      },
+                      onPressed: _showForgotPasswordDialog,
                       child: const Text(
-                        'Create Account',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        'Forgot Password?',
+                        style: TextStyle(color: Colors.indigo, fontWeight: FontWeight.w500),
                       ),
                     ),
                   ],
