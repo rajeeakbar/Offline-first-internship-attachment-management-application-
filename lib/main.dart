@@ -38,8 +38,19 @@ class InternshipApp extends ConsumerWidget {
       routes: {
         '/': (context) => authState.when(
           data: (session) => session.session != null ? const RootNavigation() : const LoginScreen(),
-          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (error, stack) => Scaffold(body: Center(child: Text('Error: $error'))),
+          loading: () => const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Authenticating...', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            ),
+          ),
+          error: (error, stack) => Scaffold(body: Center(child: Text('Auth Error: $error'))),
         ),
       },
       debugShowCheckedModeBanner: false,
@@ -159,12 +170,12 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
             children: [
               const CircularProgressIndicator(),
               const SizedBox(height: 16),
-              const Text('Setting up your workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
+              const Text('Preparing workspace...', style: TextStyle(fontWeight: FontWeight.w500)),
               const SizedBox(height: 24),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 40),
                 child: Text(
-                  'This may take a moment on slow connections. If it takes too long, try checking your internet or sign out and try again.',
+                  'This may take a moment on slow connections. If it takes too long, check your internet or try signing out.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),

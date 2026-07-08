@@ -26,11 +26,12 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   // 1. Yield from metadata immediately to prevent UI hang
   // Check multiple possible keys for role and name
   final metadata = user.userMetadata ?? {};
-  yield {
+  final initialProfile = {
     'id': user.id,
     'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
-    'role': metadata['role'] ?? 'student', // Default to student to at least show a dashboard
+    'role': metadata['role'] ?? 'student',
   };
+  yield initialProfile;
 
   // 2. We want to yield the local profile whenever it changes
   final db = await ref.read(databaseProvider.future);
@@ -38,7 +39,8 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   // Initial check
   final localResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
   if (localResults.isNotEmpty) {
-    yield localResults.first;
+    final Map<String, dynamic> localData = {...initialProfile, ...localResults.first};
+    yield localData;
   } else {
     // If not local, fetch remote and yield it
     try {
@@ -53,7 +55,8 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
         data['is_dirty'] = 0;
         data['is_deleted'] = 0;
         await db.insert('profiles', data, conflictAlgorithm: ConflictAlgorithm.replace);
-        yield data;
+        final Map<String, dynamic> localData = {...initialProfile, ...data};
+        yield localData;
       } else {
         yield null;
       }
@@ -70,7 +73,8 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       await Future.delayed(const Duration(seconds: 2));
       final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
       if (results.isNotEmpty) {
-        yield results.first;
+        final Map<String, dynamic> localData = {...initialProfile, ...results.first};
+        yield localData;
       }
     } catch (e) {
       print('Database polling error: $e');

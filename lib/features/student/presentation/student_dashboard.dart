@@ -6,6 +6,7 @@ import 'package:internship_app/features/student/presentation/pdf_export_service.
 import 'package:internship_app/features/student/presentation/log_entry_form.dart';
 import 'package:internship_app/core/services/providers.dart';
 import 'package:internship_app/core/services/main_drawer.dart';
+import 'package:internship_app/features/student/presentation/student_logs_list_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 class StudentDashboard extends ConsumerStatefulWidget {
@@ -137,7 +138,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentLogsListScreen()));
+                    },
                     child: const Text('View All'),
                   ),
                 ],
