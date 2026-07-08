@@ -27,11 +27,17 @@ class SyncService {
     _connectivitySubscription?.cancel();
   }
 
+
   Future<void> syncData({int retryCount = 0}) async {
     if (_isSyncing) return;
     _isSyncing = true;
 
     print('Starting synchronization cycle (Retry: $retryCount)...');
+
+
+  Future<void> syncData() async {
+    if (_isSyncing) return;
+    _isSyncing = true;
 
     try {
       final db = await _localDb.database;
@@ -54,6 +60,7 @@ class SyncService {
       print('Synchronization cycle completed successfully.');
     } catch (e) {
       print('Sync failed: $e');
+
       if (retryCount < 3) {
         final nextRetry = retryCount + 1;
         print('Retrying sync in ${nextRetry * 2} seconds...');
@@ -87,6 +94,10 @@ class SyncService {
         } catch (_) {}
       }
       print('Failed to pull specific profile: $e');
+
+    } finally {
+      _isSyncing = false;
+
     }
   }
 
@@ -104,6 +115,7 @@ class SyncService {
 
       List<dynamic> remoteRecords = [];
       try {
+
         remoteRecords = await query;
       } catch (e) {
         if (e.toString().contains('column "level" does not exist') && remoteTable == 'profiles') {
@@ -113,6 +125,9 @@ class SyncService {
           rethrow;
         }
       }
+
+        final Map<String, dynamic> data = Map.from(record);
+        final String id = data['id'] as String;
 
       for (var remoteRecord in remoteRecords) {
         try {
@@ -209,11 +224,19 @@ class SyncService {
     try {
       final dirtyMedia = await db.query('media_attachments', where: 'is_dirty = ?', whereArgs: [1]);
 
+
       for (var media in dirtyMedia) {
         try {
           final String id = media['id'] as String;
           final String localPath = media['local_path'] as String;
           final String logId = media['log_id'] as String;
+
+    for (var media in dirtyMedia) {
+      try {
+        final String id = media['id'] as String;
+        final String localPath = media['local_path'] as String;
+        final String logId = media['log_id'] as String;
+
 
           if (media['is_deleted'] == 1) {
             await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);

@@ -26,6 +26,7 @@ class AuthRepository {
     String? studentId,
     String? level,
   }) async {
+
     try {
       print('Attempting signup for $email');
       final response = await _client.auth.signUp(
@@ -74,6 +75,15 @@ class AuthRepository {
       print('Unexpected error during signup: $e');
       rethrow;
     }
+
+    final response = await _client.auth.signUp(
+      email: email,
+      password: password,
+      data: {'full_name': fullName, 'role': role},
+    );
+
+    return response;
+
   }
 
   Future<AuthResponse> signIn({

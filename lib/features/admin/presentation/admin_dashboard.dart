@@ -58,6 +58,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Institution Admin'),
+
       ),
       drawer: const MainDrawer(),
       body: RefreshIndicator(
@@ -114,6 +115,43 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
                 }),
           ],
         ),
+
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'System Overview',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSummaryCards(theme),
+          const SizedBox(height: 32),
+          Text(
+            'Management Tools',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
+              'Manage participating companies'),
+          _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
+              'Match students to supervisors'),
+          _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
+              'View institution-wide progress'),
+          _buildMenuTile(theme, Icons.settings_suggest_rounded,
+              'System Settings', 'Configure attachment parameters'),
+        ],
+
       ),
     );
   }
@@ -178,7 +216,11 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildMenuTile(
+
       ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap, String? badge}) {
+
+      ThemeData theme, IconData icon, String title, String subtitle) {
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ListTile(
@@ -191,6 +233,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
           ),
           child: Icon(icon, color: theme.colorScheme.primary),
         ),
+
         title: Row(
           children: [
             Text(
@@ -215,6 +258,15 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
         onTap: onTap,
+
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+        onTap: () {},
+
       ),
     );
   }

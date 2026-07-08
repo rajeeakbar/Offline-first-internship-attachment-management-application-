@@ -17,16 +17,52 @@ class StudentDashboard extends ConsumerStatefulWidget {
 }
 
 class _StudentDashboardState extends ConsumerState<StudentDashboard> {
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final profileAsync = ref.watch(userProfileProvider);
+
+  bool _isAllocated = false;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAllocationStatus();
+  }
+
+  Future<void> _checkAllocationStatus() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    final db = await LocalDatabase.instance.database;
+    final results =
+        await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+
+    if (results.isNotEmpty && results.first['supervisor_id'] != null) {
+      setState(() => _isAllocated = true);
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final user = ref.watch(currentUserProvider);
+    final fullName = user?.userMetadata?['full_name'] ?? 'Student';
+
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
 
     return profileAsync.when(
       data: (profile) {
         if (profile?['supervisor_id'] == null) {
           return const SupervisorSelectionScreen();
         }
+
 
         final fullName = profile?['full_name'] ?? 'Student';
 
@@ -124,6 +160,67 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
+
+    return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Logbook Dashboard'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Sign Out',
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Hello, $fullName!',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Keep track of your internship progress.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            _buildSummaryCard(theme),
+            const SizedBox(height: 32),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Recent Activities',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {},
+                  child: const Text('View All'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            _buildEmptyLogsPlaceholder(theme),
+          ],
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _createNewLogEntry(),
+        backgroundColor: theme.colorScheme.primary,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('New Daily Log'),
+      ),
+
     );
   }
 
@@ -154,7 +251,16 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                       ),
                     ),
                     const SizedBox(height: 4),
+
                     _buildDynamicProgressText(theme),
+
+                    Text(
+                      '12 of 60 days completed',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+
                   ],
                 ),
                 Container(
@@ -172,7 +278,19 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               ],
             ),
             const SizedBox(height: 24),
+
             _buildDynamicProgressBar(theme),
+
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: LinearProgressIndicator(
+                value: 0.2,
+                minHeight: 10,
+                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+              ),
+            ),
+
             const SizedBox(height: 20),
             OutlinedButton.icon(
               onPressed: () {
@@ -191,6 +309,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 ),
               ),
             ),
+
           ],
         ),
       ),
@@ -298,6 +417,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
             _statBox(theme, 'Pending', pending.toString(), Colors.orange),
             const SizedBox(width: 12),
             _statBox(theme, 'Rejected', rejected.toString(), Colors.red),
+
           ],
         );
       },
@@ -398,10 +518,37 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
+
   Future<void> _createNewLogEntry() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const LogEntryForm()),
     );
+
+  Widget _buildEmptyLogsPlaceholder(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      alignment: Alignment.center,
+      child: Column(
+        children: [
+          Icon(
+            Icons.assignment_outlined,
+            size: 64,
+            color: theme.colorScheme.onSurface.withOpacity(0.1),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No logs submitted yet',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _createNewLogEntry() {
+    // Navigate to Log Entry Form
   }
 }
 
@@ -454,6 +601,22 @@ class _SupervisorSelectionScreenState
     } catch (e) {
       if (mounted) {
         setState(() => _isSearching = false);
+
+    try {
+      final results = await supabase
+          .from('profiles')
+          .select()
+          .inFilter('role', ['academic_supervisor', 'industry_supervisor'])
+          .ilike('full_name', '%$query%');
+
+      setState(() {
+        _staffList = List<Map<String, dynamic>>.from(results);
+        _isSearching = false;
+      });
+    } catch (e) {
+      setState(() => _isSearching = false);
+      if (mounted) {
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Search failed: $e')),
         );
@@ -465,7 +628,9 @@ class _SupervisorSelectionScreenState
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
+
     final isIndustry = staff['role'] == 'industry_supervisor';
+
 
     setState(() => _isSearching = true);
     try {
@@ -473,13 +638,18 @@ class _SupervisorSelectionScreenState
       final now = DateTime.now().toIso8601String();
 
       await db.update('profiles', {
+
         isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
+
+        'supervisor_id': staff['id'],
+
         'updated_at': now,
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
 
       await sb.Supabase.instance.client
           .from('profiles')
+
           .update({
             isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
             'updated_at': now,
@@ -497,6 +667,19 @@ class _SupervisorSelectionScreenState
     } catch (e) {
       if (mounted) {
         setState(() => _isSearching = false);
+
+          .update({'supervisor_id': staff['id']})
+          .eq('id', user.id);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const StudentDashboard()),
+        );
+      }
+    } catch (e) {
+      setState(() => _isSearching = false);
+      if (mounted) {
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Selection failed: $e')),
         );

@@ -35,6 +35,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: password,
           );
 
+
       // Force a refresh of all relevant providers
       ref.invalidate(userProfileProvider);
       ref.invalidate(currentUserLogsProvider);
@@ -44,6 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,12 +96,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     color: Colors.grey[600],
                   ),
                 ),
+
                 const SizedBox(height: 4),
                 const Text(
                   'v2.1 - Enhanced Performance',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 10, color: Colors.indigo, fontWeight: FontWeight.bold),
                 ),
+
+
                 const SizedBox(height: 40),
                 Card(
                   child: Padding(
@@ -133,7 +138,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           obscureText: _obscurePassword,
                         ),
+
                         const SizedBox(height: 12),
+
+                        const SizedBox(height: 24),
+
                         _isLoading
                             ? const CircularProgressIndicator()
                             : ElevatedButton(
@@ -151,6 +160,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
+
                 Column(
                   children: [
                     Row(
@@ -279,6 +289,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
   }
+
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'Don\'t have an account?',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const SignupScreen()),
+                        );
+                      },
+                      child: const Text(
+                        'Create Account',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 
   @override
   void dispose() {

@@ -16,10 +16,40 @@ class SupervisorDashboard extends ConsumerStatefulWidget {
 }
 
 class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final studentsAsync = ref.watch(supervisorStudentsProvider(widget.isAcademic));
+
+  List<Map<String, dynamic>> _assignedStudents = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAssignedStudents();
+  }
+
+  Future<void> _loadAssignedStudents() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    final db = await LocalDatabase.instance.database;
+
+    final results = await db
+        .query('profiles', where: 'supervisor_id = ?', whereArgs: [user.id]);
+
+    setState(() {
+      _assignedStudents = results;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -27,6 +57,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         title: Text(widget.isAcademic ? 'Academic Portal' : 'Industry Portal'),
         actions: [
           IconButton(
+
             icon: const Icon(Icons.sync),
             onPressed: () => ref.read(syncServiceProvider).syncData(),
           ),
@@ -132,6 +163,85 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   }
 
   Widget _buildStatsOverview(ThemeData theme, int studentCount) {
+
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.all(20),
+                  sliver: SliverToBoxAdapter(
+                    child: _buildStatsOverview(theme),
+                  ),
+                ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  sliver: SliverToBoxAdapter(
+                    child: Text(
+                      'Your Assigned Students',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                _assignedStudents.isEmpty
+                    ? SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Text(
+                            'No students assigned yet.',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        ),
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final student = _assignedStudents[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor:
+                                        theme.colorScheme.secondaryContainer,
+                                    child: Text(
+                                      (student['full_name'] as String? ?? 'S')[0]
+                                          .toUpperCase(),
+                                      style: TextStyle(
+                                          color: theme.colorScheme.secondary),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    student['full_name'] ?? 'Unknown Student',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: const Text('5 Pending Logs Approval'),
+                                  trailing: const Icon(Icons.chevron_right),
+                                  onTap: () => _viewStudentLogs(student),
+                                ),
+                              );
+                            },
+                            childCount: _assignedStudents.length,
+                          ),
+                        ),
+                      ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildStatsOverview(ThemeData theme) {
+
     return Card(
       elevation: 0,
       color: theme.colorScheme.primaryContainer.withOpacity(0.2),
@@ -144,6 +254,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
+
             _statItem(theme, 'Students', studentCount.toString(), Icons.people_outline),
             FutureBuilder<int>(
               future: _getPendingCount(),
@@ -175,6 +286,18 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
     );
     return results.first['total'] as int? ?? 0;
   }
+
+
+            _statItem(theme, 'Students', _assignedStudents.length.toString(),
+                Icons.people_outline),
+            _statItem(theme, 'Pending', '12', Icons.pending_actions_outlined),
+            _statItem(theme, 'Avg. Grade', 'B+', Icons.grade_outlined),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _statItem(ThemeData theme, String label, String value, IconData icon) {
     return Column(

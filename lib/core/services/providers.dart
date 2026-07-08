@@ -1,9 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
 import '../../features/auth/data/auth_repository.dart';
+
+
+
 
 final localDbProvider = Provider<LocalDatabase>((ref) => LocalDatabase.instance);
 
@@ -15,6 +19,7 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService();
 });
+
 
 final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final user = ref.watch(currentUserProvider);
@@ -138,3 +143,4 @@ bool _mapChanged(Map<String, dynamic> a, Map<String, dynamic> b) {
   }
   return false;
 }
+
