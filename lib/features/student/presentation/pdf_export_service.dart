@@ -94,14 +94,14 @@ class PdfExportService {
           ],
         ),
         build: (context) => [
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: ['Day', 'Date', 'Description of Work', 'Knowledge Gained', 'Status'],
             data: logs.map((log) => [
               log['day_number']?.toString() ?? '-',
-              log['date'].toString().split('T')[0],
-              log['work_description'],
-              log['knowledge_acquired'],
-              log['status'],
+              log['date']?.toString().split('T')[0] ?? '',
+              log['work_description']?.toString() ?? '',
+              log['knowledge_acquired']?.toString() ?? '',
+              log['status']?.toString() ?? '',
             ]).toList(),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),

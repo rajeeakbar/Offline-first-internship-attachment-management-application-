@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,64 +27,42 @@ class AuthRepository {
     String? studentId,
     String? level,
   }) async {
-
     try {
-      print('Attempting signup for $email');
+      debugPrint('Attempting signup for $email');
       final response = await _client.auth.signUp(
         email: email,
         password: password,
         data: {
           'full_name': fullName,
           'role': role,
-          if (studentId != null) 'student_id_number': studentId,
-          if (level != null) 'level': level,
+          'student_id_number': studentId,
+          'level': level,
         },
       );
 
       if (response.user != null) {
-        print('Signup successful for ${response.user!.id}, creating profile...');
+        debugPrint('Signup successful for ${response.user!.id}, creating profile...');
         // Create a profile record in the public.profiles table
-        final profileData = {
+        await _client.from('profiles').upsert({
           'id': response.user!.id,
           'full_name': fullName,
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': 'pending',
+          'status': 'approved',
           'updated_at': DateTime.now().toIso8601String(),
-        };
-
-        try {
-          await _client.from('profiles').upsert(profileData);
-        } catch (e) {
-          if (e.toString().contains('column "level" does not exist')) {
-            print('Fallback: Creating profile without level column');
-            profileData.remove('level');
-            await _client.from('profiles').upsert(profileData);
-          } else {
-            rethrow;
-          }
-        }
-        print('Profile created successfully');
+        });
+        debugPrint('Profile created successfully');
       }
 
       return response;
     } on AuthException catch (e) {
-      print('Auth error during signup: ${e.message} (Status: ${e.statusCode})');
+      debugPrint('Auth error during signup: ${e.message} (Status: ${e.statusCode})');
       rethrow;
     } catch (e) {
-      print('Unexpected error during signup: $e');
+      debugPrint('Unexpected error during signup: $e');
       rethrow;
     }
-
-    final response = await _client.auth.signUp(
-      email: email,
-      password: password,
-      data: {'full_name': fullName, 'role': role},
-    );
-
-    return response;
-
   }
 
   Future<AuthResponse> signIn({
@@ -91,33 +70,20 @@ class AuthRepository {
     required String password,
   }) async {
     try {
-      print('Attempting signin for $email');
+      debugPrint('Attempting signin for $email');
       final response = await _client.auth.signInWithPassword(
         email: email,
         password: password,
       );
-      print('Signin successful for ${response.user?.id}');
+      debugPrint('Signin successful for ${response.user?.id}');
 
-      // Important: Ensure we have a local profile record
-      if (response.user != null) {
-        final profile = await _client
-            .from('profiles')
-            .select()
-            .eq('id', response.user!.id)
-            .maybeSingle();
-
-        if (profile != null) {
-          final db = await Supabase.instance.client; // Just a dummy to get db? No, use LocalDatabase
-          // We'll trigger a sync instead
-        }
-      }
 
       return response;
     } on AuthException catch (e) {
-      print('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
+      debugPrint('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
       rethrow;
     } catch (e) {
-      print('Unexpected error during signin: $e');
+      debugPrint('Unexpected error during signin: $e');
       rethrow;
     }
   }
@@ -134,7 +100,7 @@ class AuthRepository {
           .eq('status', 'pending');
       return response.length;
     } catch (e) {
-      print('Error fetching pending count: $e');
+      debugPrint('Error fetching pending count: $e');
       return 0;
     }
   }
@@ -143,7 +109,7 @@ class AuthRepository {
     try {
       await _client.auth.resetPasswordForEmail(email);
     } catch (e) {
-      print('Password reset error: $e');
+      debugPrint('Password reset error: $e');
       rethrow;
     }
   }

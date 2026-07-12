@@ -80,7 +80,7 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
               child: ListView.separated(
                 padding: const EdgeInsets.all(16),
                 itemCount: _students.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final student = _students[index];
                   final currentSupervisorId = student['supervisor_id'];

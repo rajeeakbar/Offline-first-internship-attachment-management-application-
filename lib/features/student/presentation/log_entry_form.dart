@@ -36,16 +36,22 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     if (text.isEmpty) return;
 
     setState(() {
-      if (isWork) _isRefiningWork = true;
-      else _isRefiningKnowledge = true;
+      if (isWork) {
+        _isRefiningWork = true;
+      } else {
+        _isRefiningKnowledge = true;
+      }
     });
 
     try {
       final refined = await ref.read(aiServiceProvider).refineLog(text);
       setState(() {
         controller.text = refined;
-        if (isWork) _isRefiningWork = false;
-        else _isRefiningKnowledge = false;
+        if (isWork) {
+          _isRefiningWork = false;
+        } else {
+          _isRefiningKnowledge = false;
+        }
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -57,8 +63,11 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
       }
     } catch (e) {
       setState(() {
-        if (isWork) _isRefiningWork = false;
-        else _isRefiningKnowledge = false;
+        if (isWork) {
+          _isRefiningWork = false;
+        } else {
+          _isRefiningKnowledge = false;
+        }
       });
     }
   }
