@@ -40,6 +40,11 @@ Our `SyncService` implements a robust hybrid strategy:
 - **Automatic Sync**: Triggers automatically upon network detection using `connectivity_plus`.
 - **Reliability**: Includes a 3-tier retry mechanism with exponential backoff.
 
+#### **💡 Important Note on Offline Usage**
+- **Authentication**: Initial login or account creation **requires an active internet connection** to verify credentials against Supabase.
+- **Post-Login**: Once logged in, you can create, edit, and view logs entirely offline. Data will automatically synchronize when internet access is restored.
+- **Manual Sync**: You can also trigger a manual synchronization by clicking the sync icon on the dashboard or using "Pull-to-refresh".
+
 ### **AI-Powered Productivity**
 The `AIService` leverages heuristic-based professionalization to help students translate "casual" notes into "formal" industrial reports. It handles:
 - Professional vocabulary mapping.
@@ -58,6 +63,33 @@ The `AIService` leverages heuristic-based professionalization to help students t
 3. **Configuration**: Update `lib/core/config/supabase_config.dart` with your project URL and Anon Key.
 4. **Assets**: Ensure `assets/images/logo.png` is present for PDF branding.
 5. **Run**: `flutter pub get` followed by `flutter run`.
+
+## 🔄 Application Workflow
+
+### **1. Secure Authentication**
+- **Sign Up**: New users create an account by providing their details (Name, Institutional ID, Level) and selecting a role (Student, Supervisor, or Admin).
+- **Login**: Existing users sign in with their email and password. **Note**: Initial authentication requires internet access.
+- **Session Management**: The app uses reactive providers to monitor auth state. When a user logs in, the navigation stack is reset, and they are directed to their specific dashboard based on their role.
+
+### **2. Role-Based Navigation**
+- **Student Dashboard**: Provides an overview of logbook progress, quick access to create new entries, and a summary of recent activities.
+- **Supervisor Dashboard**: Allows for reviewing student logs, providing feedback, and grading entries.
+- **Admin Dashboard**: Facilitates system-wide configurations and management of companies and user allocations.
+
+### **3. Offline-First Logbook Management**
+- **Daily Logging**: Students record their work and knowledge gained. If offline, the data is saved to the local SQLite database and marked as "dirty".
+- **AI Professionalizer**: Students can use the AI bot to refine their logs into formal reports.
+- **Media Attachments**: Photos can be attached to logs and are queued for upload once a connection is available.
+
+### **4. Synchronization**
+- **Automatic Sync**: The app monitors connectivity. When back online, it pushes local "dirty" changes to the cloud and pulls the latest updates using a "Cloud-wins" merging strategy.
+- **Manual Sync**: Users can trigger a manual sync via the sync icon on the dashboard to ensure their data is up to date immediately.
+
+### **5. Reporting & Export**
+- **PDF Generation**: Students can export their logs into a professionally branded PDF report, including the institutional logo and formatted tables.
+
+### **6. Secure Sign Out**
+- **Sign Out**: Users can securely sign out via the main drawer. This wipes the active session and returns the user to the login screen, ensuring data privacy on shared devices.
 
 ---
 *Built with ❤️ to empower the next generation of professionals.*

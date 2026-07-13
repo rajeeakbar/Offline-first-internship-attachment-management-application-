@@ -14,13 +14,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-
   final _studentIdController = TextEditingController();
   String _selectedRole = 'student';
   String _selectedLevel = 'Level 100';
-
-  String _selectedRole = 'student';
-
   bool _isLoading = false;
   bool _obscurePassword = true;
 
@@ -31,7 +27,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     'admin',
   ];
 
-
   final List<String> _levels = [
     'Level 100',
     'Level 200',
@@ -39,8 +34,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     'Level 400',
     'Post-Grad',
   ];
-
-
 
   Future<void> _signup() async {
     if (!_formKey.currentState!.validate()) return;
@@ -52,11 +45,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text.trim(),
             fullName: _fullNameController.text.trim(),
             role: _selectedRole,
-
             studentId: _selectedRole == 'student' ? _studentIdController.text.trim() : null,
             level: _selectedRole == 'student' ? _selectedLevel : null,
-
-
           );
       if (mounted) {
         String message = 'Signup successful!';
@@ -73,7 +63,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       }
     } catch (e) {
       if (mounted) {
-
         String errorMessage = 'Signup failed: $e';
         if (e.toString().contains('over_email_send_rate_limit')) {
           errorMessage = 'Email rate limit exceeded. Please try again in an hour or contact support.';
@@ -91,12 +80,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               textColor: Colors.white,
               onPressed: () {},
             ),
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Signup failed: $e'),
-            backgroundColor: Colors.redAccent,
-
           ),
         );
       }
@@ -188,7 +171,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                         ),
                         const SizedBox(height: 16),
                         DropdownButtonFormField<String>(
-                          value: _selectedRole,
+                          initialValue: _selectedRole,
                           decoration: const InputDecoration(
                             labelText: 'Select Role',
                             prefixIcon: Icon(Icons.badge_outlined),
@@ -203,7 +186,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             if (value != null) setState(() => _selectedRole = value);
                           },
                         ),
-
                         if (_selectedRole == 'student') ...[
                           const SizedBox(height: 16),
                           TextFormField(
@@ -218,7 +200,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                           ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
-                            value: _selectedLevel,
+                            initialValue: _selectedLevel,
                             decoration: const InputDecoration(
                               labelText: 'Current Level',
                               prefixIcon: Icon(Icons.layers_outlined),
@@ -234,7 +216,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                             },
                           ),
                         ],
-
                       ],
                     ),
                   ),
@@ -282,9 +263,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _fullNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-
     _studentIdController.dispose();
-
     super.dispose();
   }
 }

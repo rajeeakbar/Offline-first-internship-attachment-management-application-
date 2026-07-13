@@ -37,9 +37,19 @@ class LocalDatabase {
     }
 
     if (oldVersion < 6) {
-      // Add level column to profiles
+      // Add missing columns to profiles
       try {
         await db.execute('ALTER TABLE profiles ADD COLUMN level TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN industry_supervisor_id TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN company_name TEXT');
       } catch (e) {
         // Column might already exist
       }

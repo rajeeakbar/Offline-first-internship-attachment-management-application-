@@ -1,13 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite/sqflite.dart';
-
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
 import '../../features/auth/data/auth_repository.dart';
-
-
-
 
 final localDbProvider = Provider<LocalDatabase>((ref) => LocalDatabase.instance);
 
@@ -19,7 +15,6 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService();
 });
-
 
 final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final user = ref.watch(currentUserProvider);
@@ -50,7 +45,7 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
         yield initialProfile;
       }
     } catch (e) {
-      print('Database polling error: $e');
+      debugPrint('Database polling error: $e');
       yield initialProfile;
     }
     await Future.delayed(const Duration(seconds: 2));
@@ -70,7 +65,7 @@ final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, St
       );
       yield results;
     } catch (e) {
-      print('Logs query error: $e');
+      debugPrint('Logs query error: $e');
     }
     await Future.delayed(const Duration(seconds: 2));
   }
@@ -106,7 +101,7 @@ final internshipProgressProvider = StreamProvider<Map<String, dynamic>>((ref) as
 
       yield {'count': count, 'goal': goal};
     } catch (e) {
-      print('Progress stream error: $e');
+      debugPrint('Progress stream error: $e');
     }
     await Future.delayed(const Duration(seconds: 2));
   }
@@ -130,17 +125,8 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
       );
       yield results;
     } catch (e) {
-      print('Supervisor students query error: $e');
+      debugPrint('Supervisor students query error: $e');
     }
     await Future.delayed(const Duration(seconds: 2));
   }
 });
-
-bool _mapChanged(Map<String, dynamic> a, Map<String, dynamic> b) {
-  if (a.length != b.length) return true;
-  for (final key in a.keys) {
-    if (a[key] != b[key]) return true;
-  }
-  return false;
-}
-

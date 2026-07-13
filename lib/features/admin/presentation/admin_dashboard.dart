@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/data/auth_repository.dart';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 import '../../../core/services/main_drawer.dart';
@@ -8,7 +7,6 @@ import 'student_allocation_screen.dart';
 import 'company_management_screen.dart';
 import 'completion_metrics_screen.dart';
 import 'system_settings_screen.dart';
-import 'registration_approval_screen.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -20,7 +18,6 @@ class AdminDashboard extends ConsumerStatefulWidget {
 class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   int _studentCount = 0;
   int _supervisorCount = 0;
-  int _pendingCount = 0;
 
   @override
   void initState() {
@@ -35,12 +32,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     final supervisors = await db.query('profiles',
         where: 'role IN (?, ?)',
         whereArgs: ['academic_supervisor', 'industry_supervisor']);
-
-    // Also check remote for real-time pending registrations
-    try {
-      final pendingResult = await ref.read(authRepositoryProvider).getPendingCount();
-      if (mounted) setState(() => _pendingCount = pendingResult);
-    } catch (_) {}
 
     if (mounted) {
       setState(() {
@@ -58,7 +49,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text('Institution Admin'),
-
       ),
       drawer: const MainDrawer(),
       body: RefreshIndicator(
@@ -78,17 +68,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             ),
             const SizedBox(height: 16),
             _buildSummaryCards(theme),
-            const SizedBox(height: 16),
-            _buildMenuTile(
-              theme,
-              Icons.how_to_reg_rounded,
-              'Registration Approvals',
-              'Review new user accounts',
-              badge: _pendingCount > 0 ? _pendingCount.toString() : null,
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const RegistrationApprovalScreen()));
-              },
-            ),
             const SizedBox(height: 32),
             Text(
               'Management Tools',
@@ -115,43 +94,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
                 }),
           ],
         ),
-
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'System Overview',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildSummaryCards(theme),
-          const SizedBox(height: 32),
-          Text(
-            'Management Tools',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
-              'Manage participating companies'),
-          _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
-              'Match students to supervisors'),
-          _buildMenuTile(theme, Icons.analytics_outlined, 'Completion Metrics',
-              'View institution-wide progress'),
-          _buildMenuTile(theme, Icons.settings_suggest_rounded,
-              'System Settings', 'Configure attachment parameters'),
-        ],
-
       ),
     );
   }
@@ -187,9 +129,9 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -207,7 +149,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             title,
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -216,11 +158,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   }
 
   Widget _buildMenuTile(
-
       ThemeData theme, IconData icon, String title, String subtitle, {VoidCallback? onTap, String? badge}) {
-
-      ThemeData theme, IconData icon, String title, String subtitle) {
-
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: ListTile(
@@ -228,12 +166,11 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: theme.colorScheme.primary),
         ),
-
         title: Row(
           children: [
             Text(
@@ -258,15 +195,6 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
         onTap: onTap,
-
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-        onTap: () {},
-
       ),
     );
   }

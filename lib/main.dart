@@ -13,8 +13,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'https://pbxumeocnpqqtiwlvrhm.supabase.co',
-    anonKey: 'sb_publishable_06iBS3umW08dnUkenoRDcw_Udz2WYc6',
+    url: AppConfig.supabaseUrl,
+    publishableKey: AppConfig.supabaseAnonKey,
   );
 
   runApp(
@@ -23,8 +23,6 @@ void main() async {
     ),
   );
 }
-
-
 
 class InternshipApp extends ConsumerWidget {
   const InternshipApp({super.key});
@@ -60,7 +58,7 @@ class InternshipApp extends ConsumerWidget {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.indigo.withOpacity(0.1)),
+            borderSide: BorderSide(color: Colors.indigo.withValues(alpha: 0.1)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -122,12 +120,10 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
   @override
   void initState() {
     super.initState();
-
     _startSync();
   }
 
   void _startSync() {
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(syncServiceProvider).startAutoSync();
     });
@@ -135,9 +131,7 @@ class _RootNavigationState extends ConsumerState<RootNavigation> {
 
   @override
   Widget build(BuildContext context) {
-
     final profileAsync = ref.watch(userProfileProvider);
-
     final user = ref.watch(currentUserProvider);
 
     return profileAsync.when(
