@@ -77,12 +77,14 @@ class AuthRepository {
       );
       debugPrint('Signin successful for ${response.user?.id}');
 
-
       return response;
     } on AuthException catch (e) {
       debugPrint('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
       rethrow;
-    } catch (e) {
+    } on Exception catch (e) {
+      if (e.toString().contains('SocketException') || e.toString().contains('Connection failed')) {
+        throw 'Network connection error. Please ensure you have internet access for the initial sign-in.';
+      }
       debugPrint('Unexpected error during signin: $e');
       rethrow;
     }

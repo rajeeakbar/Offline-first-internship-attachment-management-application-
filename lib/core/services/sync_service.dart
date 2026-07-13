@@ -80,6 +80,9 @@ class SyncService {
   }
 
   Future<void> _syncTable(Database db, String localTable, String remoteTable) async {
+    debugPrint('--- Syncing table: $localTable ---');
+    int pullCount = 0;
+    int pushCount = 0;
     try {
       // 1. Pull changes from Cloud (Incremental)
       final lastSyncResult = await db.rawQuery('SELECT MAX(updated_at) as last_sync FROM $localTable');
@@ -92,6 +95,7 @@ class SyncService {
       }
 
       final List<dynamic> remoteRecords = await query;
+      debugPrint('Found ${remoteRecords.length} remote updates for $localTable');
 
       for (final remoteRecord in remoteRecords) {
         try {
@@ -124,12 +128,14 @@ class SyncService {
                 // Local is newer or equal: Keep local dirty, will push later
                 debugPrint('Local version of $id is newer or equal. Keeping local changes.');
               }
+              pullCount++;
             } else {
               // Local is not dirty: Safe to overwrite with remote data
               final Map<String, dynamic> data = {...remoteData};
               data['is_dirty'] = 0;
               data['is_deleted'] = remoteData['is_deleted'] ?? 0;
               await db.update(localTable, data, where: 'id = ?', whereArgs: [id]);
+              pullCount++;
             }
           } else {
             // New record from remote
@@ -137,6 +143,7 @@ class SyncService {
             data['is_dirty'] = 0;
             data['is_deleted'] = remoteData['is_deleted'] ?? 0;
             await db.insert(localTable, data);
+            pullCount++;
           }
         } catch (e) {
           debugPrint('Failed to pull record to $localTable: $e');
@@ -145,6 +152,7 @@ class SyncService {
 
       // 2. Push local changes to Cloud
       final dirtyRecords = await db.query(localTable, where: 'is_dirty = ?', whereArgs: [1]);
+      debugPrint('Found ${dirtyRecords.length} dirty records to push for $localTable');
 
       for (var record in dirtyRecords) {
         try {
@@ -163,14 +171,17 @@ class SyncService {
           if (isDeleted) {
             await _supabase.from(remoteTable).delete().eq('id', id);
             await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
+            pushCount++;
           } else {
             await _supabase.from(remoteTable).upsert(pushData);
             await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
+            pushCount++;
           }
         } catch (e) {
           debugPrint('Failed to push record from $localTable: $e');
         }
       }
+      debugPrint('Sync finished for $localTable: Pulled $pullCount, Pushed $pushCount');
     } catch (e) {
       debugPrint('Error in _syncTable ($localTable): $e');
     }

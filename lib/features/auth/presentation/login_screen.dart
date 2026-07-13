@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/services/providers.dart';
 import '../data/auth_repository.dart';
 import 'signup_screen.dart';
 
@@ -35,15 +34,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: password,
           );
 
-      // Force a refresh of all relevant providers
-      ref.invalidate(userProfileProvider);
-      ref.invalidate(currentUserLogsProvider);
-      ref.invalidate(internshipProgressProvider);
-
-      // Ensure the navigation stack is completely cleared
-      if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-      }
+      // We don't manually navigate here. main.dart watches authStateProvider
+      // and will automatically switch the RootNavigation based on the session.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

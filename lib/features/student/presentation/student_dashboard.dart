@@ -37,7 +37,18 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.sync),
-                onPressed: () => ref.read(syncServiceProvider).syncData(),
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Starting synchronization...'), duration: Duration(seconds: 1)),
+                  );
+                  await ref.read(syncServiceProvider).syncData();
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('Data is up to date.')),
+                    );
+                  }
+                },
               ),
             ],
           ),
