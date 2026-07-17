@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
-import 'dart:io';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 import '../../../core/services/ai_service.dart';
@@ -19,21 +17,18 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
   final _formKey = GlobalKey<FormState>();
   final _workController = TextEditingController();
   final _knowledgeController = TextEditingController();
-  File? _selectedImage;
   bool _isRefiningWork = false;
   bool _isRefiningKnowledge = false;
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() => _selectedImage = File(pickedFile.path));
-    }
-  }
 
   Future<void> _refineText(TextEditingController controller, bool isWork) async {
     final text = controller.text.trim();
     if (text.isEmpty) return;
+
+    // Pillar: Offline-First AI Pattern
+    // 1. Apply heuristic instantly
+    final aiService = ref.read(aiServiceProvider);
+    final offlineRefined = aiService.refineHeuristic(text);
+    controller.text = offlineRefined;
 
     setState(() {
       if (isWork) {
@@ -44,7 +39,11 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     });
 
     try {
-      final refined = await ref.read(aiServiceProvider).refineLog(text);
+      // 2. Try Gemini in background for upgrade
+      final refined = await aiService.refineLog(text).timeout(const Duration(seconds: 8));
+
+      if (!mounted) return;
+
       setState(() {
         controller.text = refined;
         if (isWork) {
@@ -53,15 +52,19 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
           _isRefiningKnowledge = false;
         }
       });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Professionalized by AI Bot ✨'),
+          SnackBar(
+            content: Text(refined == offlineRefined
+              ? 'Refined (Offline Mode) ⚡'
+              : 'Professionalized by Gemini AI ✨'),
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         if (isWork) {
           _isRefiningWork = false;
@@ -69,6 +72,7 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
           _isRefiningKnowledge = false;
         }
       });
+      // We already have the heuristic version in the controller, so we just finish quietly
     }
   }
 
@@ -111,26 +115,25 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
       'is_deleted': 0,
     });
 
-    // 2. Save Media if selected
-    if (_selectedImage != null) {
-      await db.insert('media_attachments', {
-        'id': const Uuid().v4(),
-        'log_id': logId,
-        'local_path': _selectedImage!.path,
-        'file_type': 'image',
-        'updated_at': now,
-        'is_dirty': 1,
-        'is_deleted': 0,
-      });
-    }
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Log submitted successfully (Offline-first)')),
+        const SnackBar(
+          content: Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Log saved successfully (Local Cache)'),
+            ],
+          ),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
 
       // Invalidate providers for immediate UI update
+      // We also invalidate currentUserLogsProvider since it depends on studentLogsProvider
       ref.invalidate(studentLogsProvider(user.id));
+      ref.invalidate(currentUserLogsProvider);
       ref.invalidate(internshipProgressProvider);
 
       // Trigger a sync if possible
@@ -185,14 +188,6 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
                   validator: (val) => val!.isEmpty ? 'Required' : null,
                 ),
               ],
-            ),
-            const SizedBox(height: 20),
-            if (_selectedImage != null)
-              Image.file(_selectedImage!, height: 200, fit: BoxFit.cover),
-            ElevatedButton.icon(
-              onPressed: _pickImage,
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Add Photo Attachment'),
             ),
             const SizedBox(height: 32),
             ElevatedButton(

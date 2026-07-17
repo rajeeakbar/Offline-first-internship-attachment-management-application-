@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../data/auth_repository.dart';
 import 'signup_screen.dart';
 
@@ -34,9 +35,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             password: password,
           );
 
-      // We don't manually navigate here. main.dart watches authStateProvider
-      // and will automatically switch the RootNavigation based on the session.
+      // Clear offline marker on successful cloud login
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('offline_user_email');
+
     } catch (e) {
+      if (e.toString().contains('OFFLINE_MODE_RECOVERED')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offline mode activated. Using cached profile.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          // We no longer manually push RootNavigation.
+          // main.dart watches userProfileProvider and will switch automatically.
+        }
+        return;
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -64,10 +82,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(
-                  Icons.business_center_rounded,
-                  size: 80,
-                  color: Colors.indigo,
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 100,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.business_center_rounded,
+                    size: 80,
+                    color: Colors.indigo,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 Text(
@@ -184,7 +206,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   void _showForgotPasswordDialog() {
     final resetEmailController = TextEditingController(text: _emailController.text);
+    final otpController = TextEditingController();
+    final newPasswordController = TextEditingController();
     bool isSending = false;
+    bool showOtpFields = false;
     String? errorMessage;
 
     showDialog(
@@ -193,30 +218,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         builder: (context, setDialogState) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text('Reset Password', style: TextStyle(fontWeight: FontWeight.bold)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Enter your email address to receive a password reset link.'),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: resetEmailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email Address',
-                    errorText: errorMessage != null ? 'Rate limit hit' : null,
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                if (errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      errorMessage ?? 'Unknown error',
-                      style: const TextStyle(color: Colors.red, fontSize: 12),
+            title: Text(showOtpFields ? 'Enter Code' : 'Reset Password', style: const TextStyle(fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(showOtpFields
+                    ? 'Enter the 6-digit code sent to ${resetEmailController.text} and your new password.'
+                    : 'Enter your email address to receive a password reset code.'),
+                  const SizedBox(height: 16),
+                  if (!showOtpFields)
+                    TextField(
+                      controller: resetEmailController,
+                      decoration: InputDecoration(
+                        labelText: 'Email Address',
+                        errorText: errorMessage != null ? 'Error' : null,
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                    )
+                  else ...[
+                    TextField(
+                      controller: otpController,
+                      decoration: const InputDecoration(
+                        labelText: '6-Digit Code',
+                        hintText: '123456',
+                      ),
+                      keyboardType: TextInputType.number,
                     ),
-                  ),
-              ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: newPasswordController,
+                      decoration: const InputDecoration(
+                        labelText: 'New Password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                      obscureText: true,
+                    ),
+                  ],
+                  if (errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        errorMessage ?? 'Unknown error',
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -236,15 +285,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         });
 
                         try {
-                          await ref.read(authRepositoryProvider).resetPassword(email);
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Password reset link sent to your email.'),
-                                behavior: SnackBarBehavior.floating,
-                              ),
+                          if (!showOtpFields) {
+                            await ref.read(authRepositoryProvider).resetPassword(email);
+                            if (context.mounted) {
+                              setDialogState(() {
+                                isSending = false;
+                                showOtpFields = true;
+                              });
+                            }
+                          } else {
+                            final code = otpController.text.trim();
+                            final newPass = newPasswordController.text.trim();
+                            if (code.isEmpty || newPass.isEmpty) {
+                              setDialogState(() {
+                                isSending = false;
+                                errorMessage = 'Please fill all fields';
+                              });
+                              return;
+                            }
+                            await ref.read(authRepositoryProvider).verifyOtpAndSetPassword(
+                              email: email,
+                              token: code,
+                              newPassword: newPass,
                             );
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Password updated successfully. Please sign in.'),
+                                  behavior: SnackBarBehavior.floating,
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
                           }
                         } catch (e) {
                           if (context.mounted) {
@@ -263,7 +336,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const Text('Send Reset Link'),
+                    : Text(showOtpFields ? 'Update Password' : 'Send Code'),
               ),
             ],
           );

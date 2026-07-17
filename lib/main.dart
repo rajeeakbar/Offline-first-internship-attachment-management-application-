@@ -14,7 +14,7 @@ void main() async {
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    publishableKey: AppConfig.supabaseAnonKey,
+    anonKey: AppConfig.supabaseAnonKey,
   );
 
   runApp(
@@ -24,16 +24,28 @@ void main() async {
   );
 }
 
+final navigatorKey = GlobalKey<NavigatorState>();
+
 class InternshipApp extends ConsumerWidget {
   const InternshipApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
-    final userId = ref.watch(currentUserProvider)?.id;
+    // Listen to route state changes and clear navigation stack
+    ref.listen(appRouteStateProvider, (previous, next) {
+      if (previous != next && next != AppRouteState.loading) {
+        // More aggressive stack clearing:
+        // Use a small delay to ensure the AnimatedSwitcher has transitioned
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (navigatorKey.currentState?.canPop() ?? false) {
+            navigatorKey.currentState?.popUntil((route) => route.isFirst);
+          }
+        });
+      }
+    });
 
     return MaterialApp(
-      key: ValueKey(userId ?? 'unauthenticated'),
+      navigatorKey: navigatorKey,
       title: 'Internship Management',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -58,7 +70,7 @@ class InternshipApp extends ConsumerWidget {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.indigo.withValues(alpha: 0.1)),
+            borderSide: BorderSide(color: Colors.indigo.withOpacity(0.1)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -82,30 +94,45 @@ class InternshipApp extends ConsumerWidget {
           scrolledUnderElevation: 0,
         ),
       ),
-      home: authState.when(
-        data: (session) {
-          if (session.session != null) {
-            return const RootNavigation();
-          }
-          return const LoginScreen();
+      home: _buildHome(ref),
+    );
+  }
+
+  Widget _buildHome(WidgetRef ref) {
+    final routeState = ref.watch(appRouteStateProvider);
+
+    return Container(
+      color: Colors.white,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        switchInCurve: Curves.easeInOut,
+        switchOutCurve: Curves.easeInOut,
+        layoutBuilder: (Widget? currentChild, List<Widget> previousChildren) {
+          return Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          );
         },
-        loading: () => const Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Authenticating...', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
-        ),
-        error: (error, stack) => Scaffold(
-          body: Center(child: Text('Auth Error: $error')),
-        ),
+        child: _getPage(routeState),
       ),
     );
+  }
+
+  Widget _getPage(AppRouteState state) {
+    switch (state) {
+      case AppRouteState.loading:
+        return const Scaffold(
+          key: ValueKey('loading'),
+          body: Center(child: CircularProgressIndicator()),
+        );
+      case AppRouteState.authenticated:
+        return const RootNavigation(key: ValueKey('authenticated'));
+      case AppRouteState.login:
+        return const LoginScreen(key: ValueKey('login'));
+    }
   }
 }
 

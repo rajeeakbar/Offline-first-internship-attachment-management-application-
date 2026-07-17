@@ -50,9 +50,16 @@ class MainDrawer extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
             title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
-            onTap: () {
-              ref.read(authRepositoryProvider).signOut();
-              Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+            onTap: () async {
+              // AppRouteStateProvider will handle navigation automatically
+              Navigator.pop(context);
+
+              // Pillar 4: Instant Invalidation
+              ref.invalidate(userProfileProvider);
+              ref.invalidate(currentUserLogsProvider);
+              ref.invalidate(internshipProgressProvider);
+
+              await ref.read(authRepositoryProvider).signOut();
             },
           ),
           const Spacer(),
