@@ -94,7 +94,7 @@ class PdfExportService {
           ],
         ),
         build: (context) => [
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: ['Day', 'Date', 'Description of Work', 'Knowledge Gained', 'Status'],
             data: logs.map((log) => [
               log['day_number']?.toString() ?? '-',
