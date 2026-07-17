@@ -27,6 +27,16 @@ bool _areMapsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
   return true;
 }
 
+bool _areMapListsEqual(List<Map<String, dynamic>>? a, List<Map<String, dynamic>>? b) {
+  if (a == b) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (int i = 0; i < a.length; i++) {
+    if (!_areMapsEqual(a[i], b[i])) return false;
+  }
+  return true;
+}
+
 enum AppRouteState { loading, login, authenticated }
 
 final appRouteStateProvider = Provider<AppRouteState>((ref) {
@@ -147,7 +157,7 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
 
 final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, studentId) async* {
   final db = await ref.read(databaseProvider.future);
-  int lastLength = -1;
+  List<Map<String, dynamic>>? lastValue;
 
   // Pillar 2: Immediate Cache yield
   final initialResults = await db.query(
@@ -156,7 +166,7 @@ final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, St
     whereArgs: [studentId],
     orderBy: 'date DESC',
   );
-  lastLength = initialResults.length;
+  lastValue = initialResults;
   yield initialResults;
 
   while (true) {
@@ -167,8 +177,8 @@ final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, St
         whereArgs: [studentId],
         orderBy: 'date DESC',
       );
-      if (results.length != lastLength) {
-        lastLength = results.length;
+      if (!_areMapListsEqual(results, lastValue)) {
+        lastValue = results;
         yield results;
       }
     } catch (e) {
@@ -230,6 +240,7 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
   }
 
   final db = await ref.read(databaseProvider.future);
+  List<Map<String, dynamic>>? lastValue;
 
   while (true) {
     try {
@@ -238,7 +249,10 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
         where: isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
         whereArgs: [user.id],
       );
-      yield results;
+      if (!_areMapListsEqual(results, lastValue)) {
+        lastValue = results;
+        yield results;
+      }
     } catch (e) {
       debugPrint('Supervisor students query error: $e');
     }
