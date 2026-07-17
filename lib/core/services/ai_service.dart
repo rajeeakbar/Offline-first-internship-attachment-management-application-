@@ -24,7 +24,7 @@ class AIService {
 
     try {
       // Connect to NVIDIA Free AI
-      OpenAI.baseUrl = 'https://integrate.api.nvidia.com/v1';
+      OpenAI.baseUrl = 'https://integrate.api.nvidia.com';
       OpenAI.apiKey = apiKey; // Your NVIDIA key goes here
 
       _isInitialized = true;
