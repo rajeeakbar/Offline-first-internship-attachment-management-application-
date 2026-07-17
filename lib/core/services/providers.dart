@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
@@ -16,44 +17,147 @@ final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService();
 });
 
-final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) {
-    yield null;
-    return;
+bool _areMapsEqual(Map<String, dynamic>? a, Map<String, dynamic>? b) {
+  if (a == b) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (final key in a.keys) {
+    if (a[key] != b[key]) return false;
+  }
+  return true;
+}
+
+enum AppRouteState { loading, login, authenticated }
+
+final appRouteStateProvider = Provider<AppRouteState>((ref) {
+  final authState = ref.watch(authStateProvider);
+  final profileAsync = ref.watch(userProfileProvider);
+
+  final hasSession = authState.value?.session != null;
+  final profile = profileAsync.valueOrNull;
+
+  // Authenticated state: has a session OR has a local profile (offline fallback)
+  if (hasSession || profile != null) {
+    return AppRouteState.authenticated;
   }
 
-  final metadata = user.userMetadata ?? {};
-  final initialProfile = {
-    'id': user.id,
-    'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
-    'role': metadata['role'] ?? 'student',
-  };
-  yield initialProfile;
+  // Loading state: auth is loading OR profile is loading AND we don't have a value yet
+  if (authState.isLoading || (profileAsync.isLoading && !profileAsync.hasValue)) {
+    return AppRouteState.loading;
+  }
+
+  // Login state: No session and no profile found after loading
+  return AppRouteState.login;
+});
+
+final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
+  final user = ref.watch(currentUserProvider);
+  Map<String, dynamic>? lastValue;
+
+  // Use a slightly longer delay for background polling
+  const syncInterval = Duration(seconds: 5);
+
+  if (user == null) {
+    final db = await ref.read(databaseProvider.future);
+    bool isFirstRun = true;
+
+    // Pillar 1 & 2: Immediate Cache Check
+    final prefs = await SharedPreferences.getInstance();
+    final offlineEmail = prefs.getString('offline_user_email');
+    if (offlineEmail != null) {
+      final results = await db.query('profiles', where: 'email = ?', whereArgs: [offlineEmail]);
+      if (results.isNotEmpty) {
+        lastValue = results.first;
+        yield lastValue;
+      }
+    }
+
+    while (true) {
+      final currentPrefs = await SharedPreferences.getInstance();
+      final currentOfflineEmail = currentPrefs.getString('offline_user_email');
+
+      if (currentOfflineEmail != null) {
+        final results = await db.query('profiles', where: 'email = ?', whereArgs: [currentOfflineEmail]);
+        final current = results.isNotEmpty ? results.first : null;
+        if (!_areMapsEqual(current, lastValue)) {
+          lastValue = current;
+          yield current;
+        }
+      } else {
+        if (lastValue != null) {
+          lastValue = null;
+          yield null;
+        } else if (!ref.state.hasValue) {
+           yield null;
+        }
+      }
+      if (isFirstRun) {
+        isFirstRun = false;
+        await Future.delayed(const Duration(milliseconds: 500));
+      } else {
+        await Future.delayed(syncInterval);
+      }
+    }
+  }
 
   final db = await ref.read(databaseProvider.future);
+  bool isFirstRun = true;
 
-  // Use a database listener if possible, otherwise keep polling but with a trigger mechanism
-  // For now, let's keep polling but ensure it starts immediately
+  // Pillar 2: Immediate Cache yield for authenticated users
+  final initialResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+  if (initialResults.isNotEmpty) {
+    lastValue = initialResults.first;
+    yield lastValue;
+  }
+
   while (true) {
     try {
       final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
       if (results.isNotEmpty) {
-        yield {...initialProfile, ...results.first};
+        final current = results.first;
+        if (!_areMapsEqual(current, lastValue)) {
+          lastValue = current;
+          yield current;
+        }
       } else {
-        // Yield initial profile if DB doesn't have it yet to keep UI responsive
-        yield initialProfile;
+        // Only yield metadata-based profile if DB is completely empty for this user
+        final metadata = user.userMetadata ?? {};
+        final initialProfile = {
+          'id': user.id,
+          'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
+          'role': metadata['role'] ?? 'student',
+        };
+        if (!_areMapsEqual(initialProfile, lastValue)) {
+          lastValue = initialProfile;
+          yield initialProfile;
+        }
       }
     } catch (e) {
-      debugPrint('Database polling error: $e');
-      yield initialProfile;
+      debugPrint('Profile fetch error: $e');
     }
-    await Future.delayed(const Duration(seconds: 2));
+
+    if (isFirstRun) {
+      isFirstRun = false;
+      await Future.delayed(const Duration(milliseconds: 500));
+    } else {
+      await Future.delayed(syncInterval);
+    }
   }
 });
 
 final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, studentId) async* {
   final db = await ref.read(databaseProvider.future);
+  int lastLength = -1;
+
+  // Pillar 2: Immediate Cache yield
+  final initialResults = await db.query(
+    'log_entries',
+    where: 'student_id = ?',
+    whereArgs: [studentId],
+    orderBy: 'date DESC',
+  );
+  lastLength = initialResults.length;
+  yield initialResults;
 
   while (true) {
     try {
@@ -63,23 +167,34 @@ final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, St
         whereArgs: [studentId],
         orderBy: 'date DESC',
       );
-      yield results;
+      if (results.length != lastLength) {
+        lastLength = results.length;
+        yield results;
+      }
     } catch (e) {
       debugPrint('Logs query error: $e');
     }
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 5));
   }
 });
 
 final currentUserLogsProvider = Provider<AsyncValue<List<Map<String, dynamic>>>>((ref) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return const AsyncValue.data([]);
-  return ref.watch(studentLogsProvider(user.id));
+  final profile = ref.watch(userProfileProvider).value;
+
+  final effectiveUserId = user?.id ?? profile?['id'];
+
+  if (effectiveUserId == null) return const AsyncValue.data([]);
+  return ref.watch(studentLogsProvider(effectiveUserId));
 });
 
 final internshipProgressProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
   final user = ref.watch(currentUserProvider);
-  if (user == null) {
+  final profile = ref.watch(userProfileProvider).value;
+
+  final effectiveUserId = user?.id ?? profile?['id'];
+
+  if (effectiveUserId == null) {
     yield {'count': 0, 'goal': 60};
     return;
   }
@@ -95,7 +210,7 @@ final internshipProgressProvider = StreamProvider<Map<String, dynamic>>((ref) as
       // Get count of approved logs
       final result = await db.rawQuery(
         'SELECT COUNT(*) as total FROM log_entries WHERE student_id = ? AND status = ?',
-        [user.id, 'approved'],
+        [effectiveUserId, 'approved'],
       );
       final count = result.first['total'] as int? ?? 0;
 

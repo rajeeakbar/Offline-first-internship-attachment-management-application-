@@ -1,47 +1,102 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:dart_openai/dart_openai.dart'; // This talks to NVIDIA via OpenAI-compatible endpoint
 import '../config/supabase_config.dart';
 
 final aiServiceProvider = Provider((ref) => AIService());
 
 class AIService {
-  late final GenerativeModel _model;
   bool _isInitialized = false;
 
   AIService() {
+    _initialize();
+  }
+
+  void _initialize() {
+    final apiKey = AppConfig.geminiApiKey.trim(); // We keep using geminiApiKey from config, which now holds the NVIDIA API Key
+
+    // Stop if there is no key
+    if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_KEY') {
+      debugPrint('❌ No API Key found.');
+      _isInitialized = false;
+      return;
+    }
+
     try {
-      _model = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: AppConfig.geminiApiKey,
-      );
+      // Connect to NVIDIA Free AI
+      OpenAI.baseUrl = 'https://integrate.api.nvidia.com/v1';
+      OpenAI.apiKey = apiKey; // Your NVIDIA key goes here
+
       _isInitialized = true;
+      debugPrint('✅ App is now connected to NVIDIA Free AI.');
     } catch (e) {
-      debugPrint('AI Service Initialization Error: $e');
+      debugPrint('❌ Setup Error: $e');
+      _isInitialized = false;
     }
   }
 
-  /// Professionally rewrites log text using Google Gemini.
+  /// This is the button you press to make your log sound professional.
   Future<String> refineLog(String input) async {
     if (input.trim().isEmpty) return input;
 
+    // Double check initialization in case of race conditions
     if (!_isInitialized) {
+      _initialize();
+    }
+
+    // If the internet is off or NVIDIA fails, we use the backup fixer (heuristic)
+    if (!_isInitialized) {
+      debugPrint('⚠️ No internet/key, using backup text-fixer.');
       return _refineHeuristic(input);
     }
 
+    debugPrint('📤 Sending your log to NVIDIA AI...');
+
     try {
-      final prompt = 'Rewrite the following internship log entry to be more professional, formal, and suitable for an official industrial attachment report. Keep it concise but descriptive. Input: "$input"';
+      // Send the prompt to the meta/llama-3.1-8b-instruct model on NVIDIA
+      final chatCompletion = await OpenAI.instance.chat.create(
+        model: 'meta/llama-3.1-8b-instruct', // A very good free model from NVIDIA
+        messages: [
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.user,
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                '''
+                Act as a professional industrial attachment/internship supervisor.
+                Your task is to rewrite the student's daily log entry to be highly professional and suitable for a formal university report.
 
-      final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
+                Guidelines:
+                - Use industry-standard terminology and active professional verbs (e.g., "Engineered", "Optimized", "Collaborated", "Analyzed").
+                - Maintain a formal, sophisticated, yet authentic tone.
+                - Correct all grammatical, spelling, and punctuation errors.
+                - Ensure the description is detailed but concise.
+                - Focus on the technical and professional growth aspects of the work.
+                - Do not add information that isn't implied by the original entry, but feel free to elaborate on the professional impact.
+                - Return ONLY the rewritten text, without any introductory phrases like "Here is the professional version."
 
-      final text = response.text;
-      if (text != null && text.isNotEmpty) {
-        return text.trim();
+                Student's Original Entry: "$input"
+                ''',
+              ),
+            ],
+          ),
+        ],
+        maxTokens: 200,
+        temperature: 0.7,
+      );
+
+      // Get the result
+      final refinedText = chatCompletion.choices.first.message.content?.first.text;
+
+      if (refinedText != null && refinedText.isNotEmpty) {
+        debugPrint('✅ AI Fixed it!');
+        return refinedText.trim();
+      } else {
+        // If NVIDIA gives us nothing, use the backup fixer
+        return _refineHeuristic(input);
       }
-      return _refineHeuristic(input);
     } catch (e) {
-      debugPrint('Gemini API Error (refineLog): $e');
+      // If NVIDIA breaks (no internet, etc.), use the backup fixer
+      debugPrint('❌ NVIDIA Error: $e. Using backup fixer.');
       return _refineHeuristic(input);
     }
   }
@@ -50,6 +105,11 @@ class AIService {
   Future<String> generateWeeklySummary(List<Map<String, dynamic>> logs) async {
     if (logs.isEmpty) return 'No progress recorded this week.';
 
+    // Double check initialization in case of race conditions
+    if (!_isInitialized) {
+      _initialize();
+    }
+
     if (!_isInitialized) {
       final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
       return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved.';
@@ -57,22 +117,40 @@ class AIService {
 
     try {
       final descriptions = logs.map((l) => '- ${l['work_description']}').join('\n');
-      final prompt = 'Based on the following daily log entries for an intern, generate a professional weekly summary (2-3 sentences) suitable for a supervisor review:\n$descriptions';
+      final chatCompletion = await OpenAI.instance.chat.create(
+        model: 'meta/llama-3.1-8b-instruct',
+        messages: [
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.user,
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text(
+                'Based on the following daily log entries for an intern, generate a professional weekly summary (2-3 sentences) suitable for a supervisor review:\n$descriptions',
+              ),
+            ],
+          ),
+        ],
+        maxTokens: 150,
+        temperature: 0.7,
+      );
 
-      final content = [Content.text(prompt)];
-      final response = await _model.generateContent(content);
-
-      return response.text?.trim() ?? 'Summary generation failed.';
+      final summaryText = chatCompletion.choices.first.message.content?.first.text;
+      return summaryText?.trim() ?? 'Summary generation failed.';
     } catch (e) {
-      debugPrint('Gemini API Error (generateWeeklySummary): $e');
+      debugPrint('NVIDIA API Error (generateWeeklySummary): $e');
       return 'Failed to generate automated summary due to connection issues.';
     }
   }
 
-  /// Sophisticated fallback professional mapping
+  /// Public wrapper for offline heuristic refinement
+  String refineHeuristic(String input) => _refineHeuristic(input);
+
+  // --------------------------------
+  // BACKUP FIXER (Works offline, no AI)
+  // --------------------------------
   String _refineHeuristic(String input) {
     String refined = input.trim();
 
+    // Replace casual words with business words
     final Map<String, String> corrections = {
       r'\bi did\b': 'I successfully executed',
       r'\bi made\b': 'I engineered',
@@ -95,6 +173,7 @@ class AIService {
       refined = refined.replaceAll(RegExp(pattern, caseSensitive: false), value);
     });
 
+    // Capitalize first letter and add a period if missing
     List<String> sentences = refined.split(RegExp(r'(?<=[.!?])\s+'));
     sentences = sentences.map((s) {
       if (s.isEmpty) return s;
@@ -108,6 +187,7 @@ class AIService {
 
     refined = sentences.join(' ');
 
+    // If the sentence is too short, add a generic opener
     if (refined.split(' ').length < 6) {
       refined = 'Actively participated in operational tasks where $refined';
     }

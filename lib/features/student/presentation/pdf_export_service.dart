@@ -94,7 +94,7 @@ class PdfExportService {
           ],
         ),
         build: (context) => [
-          pw.TableHelper.fromTextArray(
+          pw.Table.fromTextArray(
             headers: ['Day', 'Date', 'Description of Work', 'Knowledge Gained', 'Status'],
             data: logs.map((log) => [
               log['day_number']?.toString() ?? '-',
@@ -103,11 +103,18 @@ class PdfExportService {
               log['knowledge_acquired']?.toString() ?? '',
               log['status']?.toString() ?? '',
             ]).toList(),
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
-            cellAlignment: pw.Alignment.centerLeft,
-            cellHeight: 30,
-            cellPadding: const pw.EdgeInsets.all(5),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellAlignment: pw.Alignment.topLeft,
+            columnWidths: {
+              0: const pw.FixedColumnWidth(40), // Day (increased to prevent "Da y")
+              1: const pw.FixedColumnWidth(80), // Date
+              2: const pw.FlexColumnWidth(3),   // Description
+              3: const pw.FlexColumnWidth(2.5), // Knowledge
+              4: const pw.FixedColumnWidth(60), // Status
+            },
+            cellPadding: const pw.EdgeInsets.all(6),
           ),
         ],
         footer: (context) => pw.Container(

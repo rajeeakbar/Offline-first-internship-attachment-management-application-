@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
@@ -25,7 +26,37 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: Text(widget.isAcademic ? 'Academic Portal' : 'Industry Portal'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(30),
+          child: StreamBuilder<List<ConnectivityResult>>(
+            stream: Connectivity().onConnectivityChanged,
+            builder: (context, snapshot) {
+              final results = snapshot.data ?? [];
+              final isOnline = results.any((r) => r != ConnectivityResult.none);
+              if (isOnline) return const SizedBox.shrink();
+              return Container(
+                color: Colors.orange.withOpacity(0.9),
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: const Text(
+                  'OFFLINE MODE',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              );
+            },
+          ),
+        ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
+              ),
+            ),
+            tooltip: 'Browse & Assign Students',
+          ),
           IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () => ref.read(syncServiceProvider).syncData(),
@@ -63,9 +94,25 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                   ? SliverFillRemaining(
                       hasScrollBody: false,
                       child: Center(
-                        child: Text(
-                          'No students assigned yet.',
-                          style: TextStyle(color: Colors.grey[500]),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: 40),
+                            Text(
+                              'No students assigned yet.',
+                              style: TextStyle(color: Colors.grey[500]),
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
+                                ),
+                              ),
+                              icon: const Icon(Icons.person_add_alt_1_outlined),
+                              label: const Text('Browse & Assign Students'),
+                            ),
+                          ],
                         ),
                       ),
                     )
@@ -80,7 +127,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -134,10 +181,10 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Widget _buildStatsOverview(ThemeData theme, int studentCount) {
     return Card(
       elevation: 0,
-      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
+      color: theme.colorScheme.primaryContainer.withOpacity(0.2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
+        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.1)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -256,6 +303,240 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   }
 }
 
+class BrowseStudentsScreen extends ConsumerStatefulWidget {
+  final bool isAcademic;
+  const BrowseStudentsScreen({super.key, required this.isAcademic});
+
+  @override
+  ConsumerState<BrowseStudentsScreen> createState() => _BrowseStudentsScreenState();
+}
+
+class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
+  final _searchController = TextEditingController();
+  List<Map<String, dynamic>> _allStudents = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStudents('');
+  }
+
+  Future<void> _loadStudents(String query) async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+
+    try {
+      final db = await LocalDatabase.instance.database;
+
+      // Query local database for all students
+      final results = await db.query(
+        'profiles',
+        where: 'role = ? AND full_name LIKE ?',
+        whereArgs: ['student', '%$query%'],
+        orderBy: 'full_name',
+      );
+
+      if (mounted) {
+        setState(() {
+          _allStudents = results;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load students: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _toggleAssignment(Map<String, dynamic> student, bool assign) async {
+    final currentUser = ref.read(currentUserProvider);
+    if (currentUser == null) return;
+
+    final db = await LocalDatabase.instance.database;
+    final now = DateTime.now().toIso8601String();
+    final updateField = widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id';
+
+    setState(() => _isLoading = true);
+
+    try {
+      final updateData = {
+        updateField: assign ? currentUser.id : null,
+        'updated_at': now,
+        'is_dirty': 1,
+      };
+
+      // 1. Update local DB
+      await db.update('profiles', updateData, where: 'id = ?', whereArgs: [student['id']]);
+
+      // 2. Update remote DB
+      await sb.Supabase.instance.client
+          .from('profiles')
+          .update({
+            updateField: assign ? currentUser.id : null,
+            'updated_at': now,
+          })
+          .eq('id', student['id']);
+
+      // 3. Trigger sync and invalidate profile to update state
+      ref.read(syncServiceProvider).syncData();
+      ref.invalidate(supervisorStudentsProvider(widget.isAcademic));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              assign
+                  ? 'Assigned ${student['full_name']} to your roster'
+                  : 'Removed ${student['full_name']} from your roster',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Assignment failed: $e')),
+        );
+      }
+    } finally {
+      _loadStudents(_searchController.text);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final currentUser = ref.watch(currentUserProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Browse & Assign Students'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search students by name...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.arrow_forward_rounded),
+                  onPressed: () => _loadStudents(_searchController.text),
+                ),
+              ),
+              onSubmitted: _loadStudents,
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _allStudents.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No students found.',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _allStudents.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final student = _allStudents[index];
+                            final acadSuperId = student['supervisor_id'];
+                            final indSuperId = student['industry_supervisor_id'];
+
+                            final isAssignedToMe = widget.isAcademic
+                                ? acadSuperId == currentUser?.id
+                                : indSuperId == currentUser?.id;
+
+                            String statusText = 'Unassigned';
+                            if (widget.isAcademic) {
+                              if (acadSuperId != null) {
+                                statusText = isAssignedToMe ? 'Assigned to You' : 'Assigned to Other Academic';
+                              }
+                            } else {
+                              if (indSuperId != null) {
+                                statusText = isAssignedToMe ? 'Assigned to You' : 'Assigned to Other Industry';
+                              }
+                            }
+
+                            return Card(
+                              margin: EdgeInsets.zero,
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: theme.colorScheme.primaryContainer,
+                                  child: Text(
+                                    (student['full_name'] as String? ?? 'S')[0].toUpperCase(),
+                                    style: TextStyle(color: theme.colorScheme.primary),
+                                  ),
+                                ),
+                                title: Text(
+                                  student['full_name'] ?? 'Unknown Student',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Dept: ${student['department'] ?? "N/A"}'),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      statusText,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isAssignedToMe
+                                            ? Colors.green
+                                            : (statusText == 'Unassigned' ? Colors.grey : Colors.orange),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                trailing: isAssignedToMe
+                                    ? ElevatedButton.icon(
+                                        onPressed: () => _toggleAssignment(student, false),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red.withOpacity(0.1),
+                                          foregroundColor: Colors.red,
+                                          elevation: 0,
+                                        ),
+                                        icon: const Icon(Icons.remove_circle_outline, size: 16),
+                                        label: const Text('Remove'),
+                                      )
+                                    : ElevatedButton.icon(
+                                        onPressed: () => _toggleAssignment(student, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: theme.colorScheme.primaryContainer,
+                                          foregroundColor: theme.colorScheme.primary,
+                                          elevation: 0,
+                                        ),
+                                        icon: const Icon(Icons.add_circle_outline, size: 16),
+                                        label: const Text('Assign'),
+                                      ),
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+}
+
 class StudentLogsReviewScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> student;
   final bool isAcademic;
@@ -282,14 +563,23 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
 
   Future<void> _updateLogStatus(String logId, String status, {int? score, String? recommendation}) async {
     final db = await LocalDatabase.instance.database;
+    final now = DateTime.now().toIso8601String();
+
     await db.update('log_entries', {
       'status': status,
       'score': score,
       'recommendation': recommendation,
       'is_dirty': 1,
-      'updated_at': DateTime.now().toIso8601String(),
+      'updated_at': now,
     }, where: 'id = ?', whereArgs: [logId]);
-    _loadLogs();
+
+    // Also update profiles for the student to trigger sync if needed
+    await db.update('profiles', {
+      'updated_at': now,
+      'is_dirty': 1,
+    }, where: 'id = ?', whereArgs: [widget.student['id']]);
+
+    await _loadLogs();
 
     // Trigger sync in background
     ref.read(syncServiceProvider).syncData();

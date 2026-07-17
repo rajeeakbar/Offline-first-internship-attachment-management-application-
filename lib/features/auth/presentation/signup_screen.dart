@@ -40,7 +40,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final response = await ref.read(authRepositoryProvider).signUp(
+      await ref.read(authRepositoryProvider).signUp(
             email: _emailController.text.trim(),
             password: _passwordController.text.trim(),
             fullName: _fullNameController.text.trim(),
@@ -49,19 +49,28 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             level: _selectedRole == 'student' ? _selectedLevel : null,
           );
       if (mounted) {
-        String message = 'Signup successful!';
-        if (response.session == null) {
-          message += ' Please check your email for verification.';
-        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
+          const SnackBar(
+            content: Text('Signup successful! Welcome to your local profile.'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop();
+        // Clear stack and go to root to avoid "back button" requirement
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
+      if (e.toString().contains('OFFLINE_MODE_RECOVERED')) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offline registration successful. Syncing when online.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.of(context).pop();
+        }
+        return;
+      }
       if (mounted) {
         String errorMessage = 'Signup failed: $e';
         if (e.toString().contains('over_email_send_rate_limit')) {

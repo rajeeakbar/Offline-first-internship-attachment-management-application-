@@ -6,6 +6,7 @@ import 'package:internship_app/features/student/presentation/pdf_export_service.
 import 'package:internship_app/features/student/presentation/log_entry_form.dart';
 import 'package:internship_app/core/services/providers.dart';
 import 'package:internship_app/core/services/main_drawer.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:internship_app/features/student/presentation/student_logs_list_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
@@ -24,7 +25,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
     return profileAsync.when(
       data: (profile) {
-        if (profile?['supervisor_id'] == null) {
+        if (profile?['supervisor_id'] == null || profile?['industry_supervisor_id'] == null) {
           return const SupervisorSelectionScreen();
         }
 
@@ -33,7 +34,34 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         return Scaffold(
           backgroundColor: theme.colorScheme.surface,
           appBar: AppBar(
-            title: const Text('Logbook Dashboard'),
+            title: Row(
+              children: [
+                const Text('Logbook Dashboard'),
+                const SizedBox(width: 8),
+                _buildSyncIndicator(),
+              ],
+            ),
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(30),
+              child: StreamBuilder<List<ConnectivityResult>>(
+                stream: Connectivity().onConnectivityChanged,
+                builder: (context, snapshot) {
+                  final results = snapshot.data ?? [];
+                  final isOnline = results.any((r) => r != ConnectivityResult.none);
+                  if (isOnline) return const SizedBox.shrink();
+                  return Container(
+                    color: Colors.orange.withOpacity(0.9),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: const Text(
+                      'OFFLINE MODE - Changes will sync when online',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  );
+                },
+              ),
+            ),
             actions: [
               IconButton(
                 icon: const Icon(Icons.sync),
@@ -139,12 +167,21 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 
   Widget _buildSummaryCard(ThemeData theme) {
-    return Card(
-      elevation: 0,
-      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.primary.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -157,48 +194,54 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Internship Progress',
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
+                        color: Colors.white,
+                        fontSize: 18,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    _buildDynamicProgressText(theme),
+                    _buildDynamicProgressText(theme, isWhite: true),
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary,
+                    color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.trending_up_rounded,
+                    Icons.auto_graph_rounded,
                     color: Colors.white,
-                    size: 20,
+                    size: 24,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-            _buildDynamicProgressBar(theme),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
+            _buildDynamicProgressBar(theme, isWhite: true),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
               onPressed: () {
-                final user = ref.read(currentUserProvider);
-                PdfExportService.generateStudentLogReport(
-                  user!.id,
-                  user.userMetadata?['full_name'] ?? 'Student',
-                );
+                final profile = ref.read(userProfileProvider).value;
+                if (profile != null) {
+                  PdfExportService.generateStudentLogReport(
+                    profile['id'],
+                    profile['full_name'] ?? 'Student',
+                  );
+                }
               },
-              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-              label: const Text('Generate PDF Report'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 44),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+              label: const Text('Export Monthly Logbook'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: theme.colorScheme.primary,
+                minimumSize: const Size(double.infinity, 50),
+                elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),
@@ -222,7 +265,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 Icon(
                   Icons.assignment_outlined,
                   size: 64,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                  color: theme.colorScheme.onSurface.withOpacity(0.1),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -248,7 +291,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.all(12),
@@ -322,9 +365,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
+          color: color.withOpacity(0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withValues(alpha: 0.1)),
+          border: Border.all(color: color.withOpacity(0.1)),
         ),
         child: Column(
           children: [
@@ -364,9 +407,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
+        border: Border.all(color: color.withOpacity(0.5)),
       ),
       child: Text(
         status.toUpperCase(),
@@ -375,7 +418,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     );
   }
 
-  Widget _buildDynamicProgressBar(ThemeData theme) {
+  Widget _buildDynamicProgressBar(ThemeData theme, {bool isWhite = false}) {
     final progressAsync = ref.watch(internshipProgressProvider);
     return progressAsync.when(
       data: (data) {
@@ -384,28 +427,57 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           borderRadius: BorderRadius.circular(10),
           child: LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
-            minHeight: 10,
-            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
-            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+            minHeight: 12,
+            backgroundColor: isWhite ? Colors.white.withOpacity(0.2) : theme.colorScheme.primary.withOpacity(0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(isWhite ? Colors.white : theme.colorScheme.primary),
           ),
         );
       },
-      loading: () => const LinearProgressIndicator(minHeight: 10),
-      error: (_, _) => const SizedBox(height: 10),
+      loading: () => const LinearProgressIndicator(minHeight: 12),
+      error: (_, _) => const SizedBox(height: 12),
     );
   }
 
-  Widget _buildDynamicProgressText(ThemeData theme) {
+  Widget _buildDynamicProgressText(ThemeData theme, {bool isWhite = false}) {
     final progressAsync = ref.watch(internshipProgressProvider);
     return progressAsync.when(
       data: (data) => Text(
         '${data['count']} of ${data['goal']} days completed',
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurfaceVariant,
+        style: TextStyle(
+          color: isWhite ? Colors.white.withOpacity(0.9) : theme.colorScheme.onSurfaceVariant,
+          fontSize: 13,
         ),
       ),
-      loading: () => const Text('Loading...'),
+      loading: () => Text('Loading...', style: TextStyle(color: isWhite ? Colors.white70 : Colors.grey)),
       error: (_, _) => const Text('Error loading progress'),
+    );
+  }
+
+  Widget _buildSyncIndicator() {
+    return StreamBuilder<List<ConnectivityResult>>(
+      stream: Connectivity().onConnectivityChanged,
+      builder: (context, snapshot) {
+        final results = snapshot.data ?? [];
+        final isOnline = results.any((r) => r != ConnectivityResult.none);
+        return Tooltip(
+          message: isOnline ? 'Online - Cloud Sync Active' : 'Offline Mode - Local Storage Only',
+          child: Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: isOnline ? Colors.green : Colors.orange,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: (isOnline ? Colors.green : Colors.orange).withOpacity(0.4),
+                  blurRadius: 4,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -429,14 +501,52 @@ class _SupervisorSelectionScreenState
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _staffList = [];
   bool _isSearching = false;
+  String _activeRole = 'academic_supervisor'; // 'academic_supervisor' or 'industry_supervisor'
+
+  Map<String, dynamic>? _selectedAcademic;
+  Map<String, dynamic>? _selectedIndustry;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialStaff();
+    _loadInitialSelections();
   }
 
-  Future<void> _loadInitialStaff() async {
+  Future<void> _loadInitialSelections() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    try {
+      final db = await LocalDatabase.instance.database;
+      final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+      if (results.isNotEmpty) {
+        final profile = results.first;
+        final acadId = profile['supervisor_id'] as String?;
+        final indId = profile['industry_supervisor_id'] as String?;
+
+        if (acadId != null) {
+          final acadProfile = await db.query('profiles', where: 'id = ?', whereArgs: [acadId]);
+          if (acadProfile.isNotEmpty && mounted) {
+            setState(() {
+              _selectedAcademic = acadProfile.first;
+            });
+          }
+        }
+
+        if (indId != null) {
+          final indProfile = await db.query('profiles', where: 'id = ?', whereArgs: [indId]);
+          if (indProfile.isNotEmpty && mounted) {
+            setState(() {
+              _selectedIndustry = indProfile.first;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading initial selections: $e');
+    }
+
     _searchStaff('');
   }
 
@@ -452,7 +562,7 @@ class _SupervisorSelectionScreenState
       final queryBuilder = supabase.from('profiles').select();
 
       final results = await queryBuilder
-          .or('role.eq.academic_supervisor,role.eq.industry_supervisor')
+          .eq('role', _activeRole)
           .ilike('full_name', '%$query%')
           .order('full_name');
 
@@ -472,42 +582,56 @@ class _SupervisorSelectionScreenState
     }
   }
 
-  Future<void> _selectSupervisor(Map<String, dynamic> staff) async {
+  void _selectSupervisor(Map<String, dynamic> staff) {
+    setState(() {
+      if (_activeRole == 'academic_supervisor') {
+        _selectedAcademic = staff;
+      } else {
+        _selectedIndustry = staff;
+      }
+    });
+  }
+
+  Future<void> _completeOnboarding() async {
+    if (_selectedAcademic == null || _selectedIndustry == null) return;
+
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    final isIndustry = staff['role'] == 'industry_supervisor';
-
-    setState(() => _isSearching = true);
+    setState(() => _isSaving = true);
     try {
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
+      // Update locally
       await db.update('profiles', {
-        isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
+        'supervisor_id': _selectedAcademic!['id'],
+        'industry_supervisor_id': _selectedIndustry!['id'],
         'updated_at': now,
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
 
+      // Update remote
       await sb.Supabase.instance.client
           .from('profiles')
           .update({
-            isIndustry ? 'industry_supervisor_id' : 'supervisor_id': staff['id'],
+            'supervisor_id': _selectedAcademic!['id'],
+            'industry_supervisor_id': _selectedIndustry!['id'],
             'updated_at': now,
           })
           .eq('id', user.id);
 
       ref.read(syncServiceProvider).syncData();
+      ref.invalidate(userProfileProvider);
 
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const StudentDashboard()),
-          (route) => false,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Onboarding complete! Loading dashboard...')),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isSearching = false);
+        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Selection failed: $e')),
         );
@@ -531,36 +655,155 @@ class _SupervisorSelectionScreenState
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Icon(
               Icons.verified_user_outlined,
-              size: 64,
+              size: 48,
               color: Colors.indigo,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 12),
             Text(
-              'One last step!',
+              'Assign Your Supervisors',
               textAlign: TextAlign.center,
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Please select your assigned supervisor to unlock your student dashboard.',
+              'Select BOTH your Academic and Industry supervisors to complete your registration.',
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.grey[600],
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+            // Selection Tabs
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (_activeRole != 'academic_supervisor') {
+                        setState(() {
+                          _activeRole = 'academic_supervisor';
+                          _searchController.clear();
+                        });
+                        _searchStaff('');
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: _activeRole == 'academic_supervisor'
+                            ? theme.colorScheme.primaryContainer
+                            : Colors.grey.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _activeRole == 'academic_supervisor'
+                              ? theme.colorScheme.primary
+                              : Colors.grey.withOpacity(0.2),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.school_outlined,
+                            color: _activeRole == 'academic_supervisor'
+                                ? theme.colorScheme.primary
+                                : Colors.grey,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Academic',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedAcademic?['full_name'] ?? 'Not Selected',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _selectedAcademic != null ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      if (_activeRole != 'industry_supervisor') {
+                        setState(() {
+                          _activeRole = 'industry_supervisor';
+                          _searchController.clear();
+                        });
+                        _searchStaff('');
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: _activeRole == 'industry_supervisor'
+                            ? theme.colorScheme.primaryContainer
+                            : Colors.grey.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _activeRole == 'industry_supervisor'
+                              ? theme.colorScheme.primary
+                              : Colors.grey.withOpacity(0.2),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.business_outlined,
+                            color: _activeRole == 'industry_supervisor'
+                                ? theme.colorScheme.primary
+                                : Colors.grey,
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Industry',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedIndustry?['full_name'] ?? 'Not Selected',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _selectedIndustry != null ? Colors.green : Colors.red,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search supervisor by name...',
+                hintText: _activeRole == 'academic_supervisor'
+                    ? 'Search academic supervisor...'
+                    : 'Search industry supervisor...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.arrow_forward_rounded),
@@ -569,47 +812,81 @@ class _SupervisorSelectionScreenState
               ),
               onSubmitted: _searchStaff,
             ),
-            const SizedBox(height: 24),
-            if (_isSearching)
-              const Center(child: CircularProgressIndicator())
-            else
-              Expanded(
-                child: _staffList.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No supervisors found. Try searching.',
-                          style: TextStyle(color: Colors.grey[500]),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: _staffList.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final staff = _staffList[index];
-                          return Card(
-                            margin: EdgeInsets.zero,
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: theme.colorScheme.primaryContainer,
-                                child: Text(
-                                  (staff['full_name'] as String? ?? 'U')[0]
-                                      .toUpperCase(),
-                                  style: TextStyle(color: theme.colorScheme.primary),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _isSearching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _staffList.isEmpty
+                      ? Center(
+                          child: Text(
+                            'No supervisors found. Try searching.',
+                            style: TextStyle(color: Colors.grey[500]),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _staffList.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 8),
+                          itemBuilder: (context, index) {
+                            final staff = _staffList[index];
+                            final isCurrentlySelected =
+                                (_activeRole == 'academic_supervisor' &&
+                                        _selectedAcademic?['id'] == staff['id']) ||
+                                    (_activeRole == 'industry_supervisor' &&
+                                        _selectedIndustry?['id'] == staff['id']);
+
+                            return Card(
+                              margin: EdgeInsets.zero,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(
+                                  color: isCurrentlySelected
+                                      ? theme.colorScheme.primary
+                                      : Colors.transparent,
+                                  width: 1.5,
                                 ),
                               ),
-                              title: Text(
-                                staff['full_name'] ?? 'Anonymous Staff',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: theme.colorScheme.primaryContainer,
+                                  child: Text(
+                                    (staff['full_name'] as String? ?? 'U')[0]
+                                        .toUpperCase(),
+                                    style: TextStyle(color: theme.colorScheme.primary),
+                                  ),
+                                ),
+                                title: Text(
+                                  staff['full_name'] ?? 'Anonymous Staff',
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(staff['department'] ?? 'General Dept'),
+                                trailing: isCurrentlySelected
+                                    ? const Icon(Icons.check_circle, color: Colors.green)
+                                    : const Icon(Icons.add_circle_outline,
+                                        color: Colors.indigo),
+                                onTap: () => _selectSupervisor(staff),
                               ),
-                              subtitle: Text(staff['department'] ?? 'General Dept'),
-                              trailing: const Icon(Icons.add_circle_outline,
-                                  color: Colors.indigo),
-                              onTap: () => _selectSupervisor(staff),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: (_selectedAcademic == null || _selectedIndustry == null || _isSaving)
+                  ? null
+                  : _completeOnboarding,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              child: _isSaving
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text(
+                      'Complete Onboarding',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+            ),
           ],
         ),
       ),

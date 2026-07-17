@@ -126,3 +126,19 @@ CREATE POLICY "Admins can manage settings" ON public.app_settings
 -- 10. Storage Buckets
 -- Run this in the Supabase Dashboard:
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('logs', 'logs', true);
+
+-- 11. Custom OTP Password Reset Table
+CREATE TABLE public.password_reset_otps (
+  id BIGSERIAL PRIMARY KEY,
+  email TEXT NOT NULL,
+  otp_code TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '10 minutes'),
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_reset_otps_email ON public.password_reset_otps(email);
+
+-- Enable RLS for OTP table (strictly limited)
+ALTER TABLE public.password_reset_otps ENABLE ROW LEVEL SECURITY;
+-- No public access - only Edge Functions using service_role can interact

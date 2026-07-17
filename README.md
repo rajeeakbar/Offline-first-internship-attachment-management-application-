@@ -41,7 +41,8 @@ Our `SyncService` implements a robust hybrid strategy:
 - **Reliability**: Includes a 3-tier retry mechanism with exponential backoff.
 
 #### **💡 Important Note on Offline Usage**
-- **Authentication**: Initial login or account creation **requires an active internet connection** to verify credentials against Supabase.
+- **Authentication**: Initial account creation **requires an active internet connection**. However, once a user has successfully logged in once on a device, the system caches their profile.
+- **Cached Login**: In case of no internet, the app supports a **Cached Login** mode. If the entered email matches a previously logged-in user on the device, the app allows access to the dashboard in offline mode.
 - **Post-Login**: Once logged in, you can create, edit, and view logs entirely offline. Data will automatically synchronize when internet access is restored.
 - **Manual Sync**: You can also trigger a manual synchronization by clicking the sync icon on the dashboard or using "Pull-to-refresh".
 

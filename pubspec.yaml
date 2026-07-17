@@ -23,6 +23,8 @@ dependencies:
   printing: ^5.11.1
   shared_preferences: ^2.2.2
   google_generative_ai: ^0.4.7
+  crypto: ^3.0.7
+  dart_openai: ^5.1.0
 
 dev_dependencies:
   flutter_test:

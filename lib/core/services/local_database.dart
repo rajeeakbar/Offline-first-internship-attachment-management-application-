@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -36,7 +36,7 @@ class LocalDatabase {
       return;
     }
 
-    if (oldVersion < 6) {
+    if (oldVersion < 7) {
       // Add missing columns to profiles
       try {
         await db.execute('ALTER TABLE profiles ADD COLUMN level TEXT');
@@ -50,6 +50,19 @@ class LocalDatabase {
       }
       try {
         await db.execute('ALTER TABLE profiles ADD COLUMN company_name TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN email TEXT');
+      } catch (e) {
+        // Column might already exist
+      }
+    }
+
+    if (oldVersion < 8) {
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN password_hash TEXT');
       } catch (e) {
         // Column might already exist
       }
@@ -99,6 +112,8 @@ class LocalDatabase {
     await db.execute('''
       CREATE TABLE profiles (
         id $uuidType,
+        email $nullableTextType,
+        password_hash $nullableTextType,
         full_name $nullableTextType,
         role $nullableTextType,
         supervisor_id $nullableTextType,
