@@ -96,10 +96,8 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       } else {
         if (lastValue != null) {
           lastValue = null;
-          yield null;
-        } else if (!ref.state.hasValue) {
-           yield null;
         }
+        yield null;
       }
       if (isFirstRun) {
         isFirstRun = false;
@@ -113,11 +111,32 @@ final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final db = await ref.read(databaseProvider.future);
   bool isFirstRun = true;
 
-  // Pillar 2: Immediate Cache yield for authenticated users
-  final initialResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-  if (initialResults.isNotEmpty) {
-    lastValue = initialResults.first;
-    yield lastValue;
+  // Pillar 2: Immediate Cache yield for authenticated users (with robust fallback)
+  try {
+    final initialResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+    if (initialResults.isNotEmpty) {
+      lastValue = initialResults.first;
+      yield lastValue;
+    } else {
+      final metadata = user.userMetadata ?? {};
+      final initialProfile = {
+        'id': user.id,
+        'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
+        'role': metadata['role'] ?? 'student',
+      };
+      lastValue = initialProfile;
+      yield initialProfile;
+    }
+  } catch (e) {
+    debugPrint('Initial profile query error: $e');
+    final metadata = user.userMetadata ?? {};
+    final initialProfile = {
+      'id': user.id,
+      'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
+      'role': metadata['role'] ?? 'student',
+    };
+    lastValue = initialProfile;
+    yield initialProfile;
   }
 
   while (true) {
