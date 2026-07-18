@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
@@ -15,6 +16,7 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
   List<Map<String, dynamic>> _students = [];
   List<Map<String, dynamic>> _academicSupervisors = [];
   bool _isLoading = true;
+  Set<String> _pendingUpdates = {}; // Track student IDs that are dirty
 
   @override
   void initState() {
@@ -24,52 +26,149 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    final supabase = Supabase.instance.client;
+    final db = await LocalDatabase.instance.database;
 
+    // 1️⃣ Load students from local DB (offline-first)
+    final localStudents = await db.query(
+      'profiles',
+      where: 'role = ? AND is_deleted = ?',
+      whereArgs: ['student', 0],
+    );
+    _students = List<Map<String, dynamic>>.from(localStudents);
+
+    // Mark which students have pending sync (is_dirty = 1)
+    _pendingUpdates = _students
+        .where((s) => (s['is_dirty'] ?? 0) == 1)
+        .map((s) => s['id'].toString())
+        .toSet();
+
+    // 2️⃣ Load academic supervisors from local DB
+    final localSupervisors = await db.query(
+      'profiles',
+      where: 'role = ? AND is_deleted = ?',
+      whereArgs: ['academic_supervisor', 0],
+    );
+    _academicSupervisors = List<Map<String, dynamic>>.from(localSupervisors);
+
+    // 3️⃣ If online, refresh from cloud (but only if we have internet)
     try {
+      final supabase = Supabase.instance.client;
       final studentsRes = await supabase.from('profiles').select().eq('role', 'student');
       final supervisorsRes = await supabase.from('profiles').select().eq('role', 'academic_supervisor');
 
-      setState(() {
-        _students = List<Map<String, dynamic>>.from(studentsRes);
-        _academicSupervisors = List<Map<String, dynamic>>.from(supervisorsRes);
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      // Merge cloud data into local DB (respect offline wins: skip if local is dirty)
+      for (var cloudStudent in studentsRes) {
+        final local = _students.firstWhere(
+          (s) => s['id'] == cloudStudent['id'],
+          orElse: () => {},
+        );
+        if (local.isNotEmpty && (local['is_dirty'] ?? 0) == 1) {
+          // Local is dirty – offline wins: keep local, don't overwrite
+          continue;
+        }
+        // Update local DB with cloud data
+        await db.insert('profiles', {
+          ...cloudStudent,
+          'is_dirty': 0,
+          'is_deleted': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
+
+      // Also update supervisors similarly
+      for (var cloudSup in supervisorsRes) {
+        await db.insert('profiles', {
+          ...cloudSup,
+          'is_dirty': 0,
+          'is_deleted': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      // Reload local DB after merge
+      final refreshedStudents = await db.query(
+        'profiles',
+        where: 'role = ? AND is_deleted = ?',
+        whereArgs: ['student', 0],
+      );
+      _students = List<Map<String, dynamic>>.from(refreshedStudents);
+      _pendingUpdates = _students
+          .where((s) => (s['is_dirty'] ?? 0) == 1)
+          .map((s) => s['id'].toString())
+          .toSet();
+
+      final refreshedSupervisors = await db.query(
+        'profiles',
+        where: 'role = ? AND is_deleted = ?',
+        whereArgs: ['academic_supervisor', 0],
+      );
+      _academicSupervisors = List<Map<String, dynamic>>.from(refreshedSupervisors);
+
+    } catch (e) {
+      debugPrint('⚠️ Could not refresh from cloud – using local data only: $e');
+    }
+
+    if (mounted) {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _assignAcademicSupervisor(String studentId, String? supervisorId) async {
-    final supabase = Supabase.instance.client;
-    try {
-      // Update remote
-      await supabase.from('profiles').update({'supervisor_id': supervisorId}).eq('id', studentId);
+    final db = await LocalDatabase.instance.database;
 
-      // Update local to ensure immediate UI feedback
-      final db = await LocalDatabase.instance.database;
-      await db.update('profiles', {
+    // ✅ 1. Update local DB with is_dirty = 1 (offline-first)
+    await db.update(
+      'profiles',
+      {
         'supervisor_id': supervisorId,
-        'is_dirty': 0, // Mark clean because we just pushed to cloud
+        'is_dirty': 1,
         'updated_at': DateTime.now().toIso8601String(),
-      }, where: 'id = ?', whereArgs: [studentId]);
+      },
+      where: 'id = ?',
+      whereArgs: [studentId],
+    );
 
-      _loadData();
-      ref.read(syncServiceProvider).syncData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Update failed: $e')));
+    // 2. Update local state instantly
+    setState(() {
+      final index = _students.indexWhere((s) => s['id'] == studentId);
+      if (index != -1) {
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(_students[index]);
+        updated['supervisor_id'] = supervisorId;
+        updated['is_dirty'] = 1;
+        _students[index] = updated;
       }
+      _pendingUpdates.add(studentId);
+    });
+
+    // 3. Trigger background sync (will push when online)
+    ref.read(syncServiceProvider).syncData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Assignment saved locally. Will sync when online.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Academic Allocation')),
+      appBar: AppBar(
+        title: const Text('Academic Allocation'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            onPressed: () {
+              ref.read(syncServiceProvider).syncData();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Syncing...')),
+              );
+            },
+          ),
+        ],
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -77,48 +176,66 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                 await _loadData();
                 await ref.read(syncServiceProvider).syncData();
               },
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: _students.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final student = _students[index];
-                  final currentSupervisorId = student['supervisor_id'];
+              child: _students.isEmpty
+                  ? const Center(child: Text('No students found.'))
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _students.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        final student = _students[index];
+                        final currentSupervisorId = student['supervisor_id'];
+                        final isPending = _pendingUpdates.contains(student['id']);
 
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-                      child: ListTile(
-                        title: Text(student['full_name'] ?? 'Unknown Student', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Text('ID: ${student['student_id_number'] ?? "N/A"}'),
-                            const SizedBox(height: 12),
-                            const Text('Assign Academic Supervisor:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo)),
-                            const SizedBox(height: 4),
-                          ],
-                        ),
-                        isThreeLine: true,
-                        trailing: DropdownButton<String>(
-                          underline: const SizedBox(),
-                          hint: const Text('Select Staff'),
-                          value: currentSupervisorId,
-                          items: [
-                            const DropdownMenuItem(value: null, child: Text('None')),
-                            ..._academicSupervisors.map((s) => DropdownMenuItem(
-                              value: s['id'] as String,
-                              child: Text(s['full_name'] ?? 'Staff'),
-                            )),
-                          ],
-                          onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
-                        ),
-                      ),
+                        return Card(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: ListTile(
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      student['full_name'] ?? 'Unknown Student',
+                                      style: const TextStyle(fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  if (isPending)
+                                    const Padding(
+                                      padding: EdgeInsets.only(left: 8),
+                                      child: Icon(Icons.sync_problem, color: Colors.orange, size: 18),
+                                    ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('ID: ${student['student_id_number'] ?? "N/A"}'),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Assign Academic Supervisor:',
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo),
+                                  ),
+                                ],
+                              ),
+                              isThreeLine: true,
+                              trailing: DropdownButton<String>(
+                                underline: const SizedBox(),
+                                hint: const Text('Select Staff'),
+                                value: currentSupervisorId,
+                                items: [
+                                  const DropdownMenuItem(value: null, child: Text('None')),
+                                  ..._academicSupervisors.map((s) => DropdownMenuItem(
+                                        value: s['id'] as String,
+                                        child: Text(s['full_name'] ?? 'Staff'),
+                                      )),
+                                ],
+                                onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
             ),
     );
   }
