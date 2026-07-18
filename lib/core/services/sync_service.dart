@@ -132,10 +132,10 @@ class SyncService {
 
     for (var media in dirtyMedia) {
       try {
-        // Explicitly cast or string-convert types to resolve 'Object?' cannot be assigned to 'String'
-        final String id = media['id']?.toString() ?? '';
-        final String localPath = media['local_path']?.toString() ?? '';
-        final String logId = media['log_id']?.toString() ?? '';
+        // High-performance runtime casting to maintain robust type safety and avoid redundant parsing
+        final String id = media['id'] as String;
+        final String localPath = media['local_path'] as String;
+        final String logId = media['log_id'] as String;
 
         if (id.isEmpty) continue;
 
