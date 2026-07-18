@@ -654,240 +654,250 @@ class _SupervisorSelectionScreenState
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(
-              Icons.verified_user_outlined,
-              size: 48,
-              color: Colors.indigo,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Assign Your Supervisors',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Select BOTH your Academic and Industry supervisors to complete your registration.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Selection Tabs
-            Row(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (_activeRole != 'academic_supervisor') {
-                        setState(() {
-                          _activeRole = 'academic_supervisor';
-                          _searchController.clear();
-                        });
-                        _searchStaff('');
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: _activeRole == 'academic_supervisor'
-                            ? theme.colorScheme.primaryContainer
-                            : Colors.grey.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _activeRole == 'academic_supervisor'
-                              ? theme.colorScheme.primary
-                              : Colors.grey.withOpacity(0.2),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.school_outlined,
-                            color: _activeRole == 'academic_supervisor'
-                                ? theme.colorScheme.primary
-                                : Colors.grey,
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Academic',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedAcademic?['full_name'] ?? 'Not Selected',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _selectedAcademic != null ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                const Icon(
+                  Icons.verified_user_outlined,
+                  size: 48,
+                  color: Colors.indigo,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Assign Your Supervisors',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: InkWell(
-                    onTap: () {
-                      if (_activeRole != 'industry_supervisor') {
-                        setState(() {
-                          _activeRole = 'industry_supervisor';
-                          _searchController.clear();
-                        });
-                        _searchStaff('');
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                      decoration: BoxDecoration(
-                        color: _activeRole == 'industry_supervisor'
-                            ? theme.colorScheme.primaryContainer
-                            : Colors.grey.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _activeRole == 'industry_supervisor'
-                              ? theme.colorScheme.primary
-                              : Colors.grey.withOpacity(0.2),
-                          width: 1.5,
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.business_outlined,
-                            color: _activeRole == 'industry_supervisor'
-                                ? theme.colorScheme.primary
-                                : Colors.grey,
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Industry',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedIndustry?['full_name'] ?? 'Not Selected',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _selectedIndustry != null ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.w500,
+                const SizedBox(height: 6),
+                Text(
+                  'Select BOTH your Academic and Industry supervisors to complete your registration.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // Selection Tabs
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          if (_activeRole != 'academic_supervisor') {
+                            setState(() {
+                              _activeRole = 'academic_supervisor';
+                              _searchController.clear();
+                            });
+                            _searchStaff('');
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: _activeRole == 'academic_supervisor'
+                                ? theme.colorScheme.primaryContainer
+                                : Colors.grey.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _activeRole == 'academic_supervisor'
+                                  ? theme.colorScheme.primary
+                                  : Colors.grey.withOpacity(0.2),
+                              width: 1.5,
                             ),
                           ),
-                        ],
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.school_outlined,
+                                color: _activeRole == 'academic_supervisor'
+                                    ? theme.colorScheme.primary
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Academic',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _selectedAcademic?['full_name'] ?? 'Not Selected',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _selectedAcademic != null ? Colors.green : Colors.red,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          if (_activeRole != 'industry_supervisor') {
+                            setState(() {
+                              _activeRole = 'industry_supervisor';
+                              _searchController.clear();
+                            });
+                            _searchStaff('');
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                          decoration: BoxDecoration(
+                            color: _activeRole == 'industry_supervisor'
+                                ? theme.colorScheme.primaryContainer
+                                : Colors.grey.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _activeRole == 'industry_supervisor'
+                                  ? theme.colorScheme.primary
+                                  : Colors.grey.withOpacity(0.2),
+                              width: 1.5,
+                        ),
+                      ),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.business_outlined,
+                                color: _activeRole == 'industry_supervisor'
+                                    ? theme.colorScheme.primary
+                                    : Colors.grey,
+                              ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Industry',
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _selectedIndustry?['full_name'] ?? 'Not Selected',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: _selectedIndustry != null ? Colors.green : Colors.red,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: _activeRole == 'academic_supervisor'
+                        ? 'Search academic supervisor...'
+                        : 'Search industry supervisor...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.arrow_forward_rounded),
+                      onPressed: () => _searchStaff(_searchController.text),
+                    ),
                   ),
+                  onSubmitted: _searchStaff,
+                ),
+                const SizedBox(height: 12),
+                _isSearching
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : _staffList.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24.0),
+                            child: Center(
+                              child: Text(
+                                'No supervisors found. Try searching.',
+                                style: TextStyle(color: Colors.grey[500]),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _staffList.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 8),
+                            itemBuilder: (context, index) {
+                              final staff = _staffList[index];
+                              final isCurrentlySelected =
+                                  (_activeRole == 'academic_supervisor' &&
+                                          _selectedAcademic?['id'] == staff['id']) ||
+                                      (_activeRole == 'industry_supervisor' &&
+                                          _selectedIndustry?['id'] == staff['id']);
+
+                              return Card(
+                                margin: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isCurrentlySelected
+                                        ? theme.colorScheme.primary
+                                        : Colors.transparent,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: ListTile(
+                                  leading: CircleAvatar(
+                                    backgroundColor: theme.colorScheme.primaryContainer,
+                                    child: Text(
+                                      (staff['full_name'] as String? ?? 'U')[0]
+                                          .toUpperCase(),
+                                      style: TextStyle(color: theme.colorScheme.primary),
+                                    ),
+                                  ),
+                                  title: Text(
+                                    staff['full_name'] ?? 'Anonymous Staff',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  subtitle: Text(staff['department'] ?? 'General Dept'),
+                                  trailing: isCurrentlySelected
+                                      ? const Icon(Icons.check_circle, color: Colors.green)
+                                      : const Icon(Icons.add_circle_outline,
+                                          color: Colors.indigo),
+                                  onTap: () => _selectSupervisor(staff),
+                                ),
+                              );
+                            },
+                          ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: (_selectedAcademic == null || _selectedIndustry == null || _isSaving)
+                      ? null
+                      : _completeOnboarding,
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: _isSaving
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          'Complete Onboarding',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: _activeRole == 'academic_supervisor'
-                    ? 'Search academic supervisor...'
-                    : 'Search industry supervisor...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.arrow_forward_rounded),
-                  onPressed: () => _searchStaff(_searchController.text),
-                ),
-              ),
-              onSubmitted: _searchStaff,
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: _isSearching
-                  ? const Center(child: CircularProgressIndicator())
-                  : _staffList.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No supervisors found. Try searching.',
-                            style: TextStyle(color: Colors.grey[500]),
-                          ),
-                        )
-                      : ListView.separated(
-                          itemCount: _staffList.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            final staff = _staffList[index];
-                            final isCurrentlySelected =
-                                (_activeRole == 'academic_supervisor' &&
-                                        _selectedAcademic?['id'] == staff['id']) ||
-                                    (_activeRole == 'industry_supervisor' &&
-                                        _selectedIndustry?['id'] == staff['id']);
-
-                            return Card(
-                              margin: EdgeInsets.zero,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(
-                                  color: isCurrentlySelected
-                                      ? theme.colorScheme.primary
-                                      : Colors.transparent,
-                                  width: 1.5,
-                                ),
-                              ),
-                              child: ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: theme.colorScheme.primaryContainer,
-                                  child: Text(
-                                    (staff['full_name'] as String? ?? 'U')[0]
-                                        .toUpperCase(),
-                                    style: TextStyle(color: theme.colorScheme.primary),
-                                  ),
-                                ),
-                                title: Text(
-                                  staff['full_name'] ?? 'Anonymous Staff',
-                                  style: const TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                subtitle: Text(staff['department'] ?? 'General Dept'),
-                                trailing: isCurrentlySelected
-                                    ? const Icon(Icons.check_circle, color: Colors.green)
-                                    : const Icon(Icons.add_circle_outline,
-                                        color: Colors.indigo),
-                                onTap: () => _selectSupervisor(staff),
-                              ),
-                            );
-                          },
-                        ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: (_selectedAcademic == null || _selectedIndustry == null || _isSaving)
-                  ? null
-                  : _completeOnboarding,
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: _isSaving
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text(
-                      'Complete Onboarding',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-            ),
-          ],
+          ),
         ),
       ),
     );
