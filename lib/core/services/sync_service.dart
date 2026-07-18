@@ -98,6 +98,21 @@ class SyncService {
     for (var remoteRecord in remoteRecords) {
       try {
         final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord as Map);
+        final String id = remoteData['id']?.toString() ?? '';
+
+        if (id.isNotEmpty) {
+          // Check if there is a local record with is_dirty = 1 (meaning offline wins)
+          final localRecord = await db.query(localTable, where: 'id = ?', whereArgs: [id]);
+          if (localRecord.isNotEmpty) {
+            final int isDirty = int.tryParse(localRecord.first['is_dirty']?.toString() ?? '0') ?? 0;
+            if (isDirty == 1) {
+              // Local record has unsynced offline changes: offline wins, skip overwriting
+              debugPrint('Offline Wins: Skip overwriting unsynced local record $id in $localTable with cloud data');
+              continue;
+            }
+          }
+        }
+
         remoteData['is_dirty'] = 0;
         remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
 
