@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
 import '../../features/auth/data/auth_repository.dart';
@@ -60,118 +61,104 @@ final appRouteStateProvider = Provider<AppRouteState>((ref) {
   return AppRouteState.login;
 });
 
-final userProfileProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
+final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final user = ref.watch(currentUserProvider);
-  Map<String, dynamic>? lastValue;
-
-  // Use a slightly longer delay for background polling
-  const syncInterval = Duration(seconds: 5);
 
   if (user == null) {
-    final db = await ref.read(databaseProvider.future);
-    bool isFirstRun = true;
-
-    // Pillar 1 & 2: Immediate Cache Check
+    // Check if offline email is stored
     final prefs = await SharedPreferences.getInstance();
     final offlineEmail = prefs.getString('offline_user_email');
     if (offlineEmail != null) {
-      final results = await db.query('profiles', where: 'email = ?', whereArgs: [offlineEmail]);
-      if (results.isNotEmpty) {
-        lastValue = results.first;
-        yield lastValue;
+      try {
+        final db = await ref.read(databaseProvider.future);
+        final results = await db.query('profiles', where: 'email = ?', whereArgs: [offlineEmail]);
+        if (results.isNotEmpty) {
+          final profile = results.first;
+          await prefs.setString('user_role_${profile['id']}', profile['role']?.toString() ?? 'student');
+          await prefs.setString('user_name_${profile['id']}', profile['full_name']?.toString() ?? 'User');
+          return profile;
+        }
+      } catch (e) {
+        debugPrint('Failed to query offline profile from SQLite: $e');
       }
     }
-
-    while (true) {
-      final currentPrefs = await SharedPreferences.getInstance();
-      final currentOfflineEmail = currentPrefs.getString('offline_user_email');
-
-      if (currentOfflineEmail != null) {
-        final results = await db.query('profiles', where: 'email = ?', whereArgs: [currentOfflineEmail]);
-        final current = results.isNotEmpty ? results.first : null;
-        if (!_areMapsEqual(current, lastValue)) {
-          lastValue = current;
-          yield current;
-        }
-      } else {
-        if (lastValue != null) {
-          lastValue = null;
-        }
-        yield null;
-      }
-      if (isFirstRun) {
-        isFirstRun = false;
-        await Future.delayed(const Duration(milliseconds: 500));
-      } else {
-        await Future.delayed(syncInterval);
-      }
-    }
+    return null;
   }
 
-  final db = await ref.read(databaseProvider.future);
-  bool isFirstRun = true;
+  // 1️⃣ FIRST: Try to load from local SharedPreferences cache (instant!)
+  final prefs = await SharedPreferences.getInstance();
+  final cachedRole = prefs.getString('user_role_${user.id}');
+  final cachedName = prefs.getString('user_name_${user.id}');
 
-  // Pillar 2: Immediate Cache yield for authenticated users (with robust fallback)
+  if (cachedRole != null) {
+    debugPrint('✅ Loaded role from cache: $cachedRole');
+    return {
+      'id': user.id,
+      'role': cachedRole,
+      'full_name': cachedName ?? 'User',
+    };
+  }
+
+  // 2️⃣ SECOND: Try local SQLite DB (instant fallback if no prefs cache yet)
   try {
-    final initialResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-    if (initialResults.isNotEmpty) {
-      lastValue = initialResults.first;
-      yield lastValue;
-    } else {
-      final metadata = user.userMetadata ?? {};
-      final initialProfile = {
-        'id': user.id,
-        'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
-        'role': metadata['role'] ?? 'student',
-      };
-      lastValue = initialProfile;
-      yield initialProfile;
+    final db = await ref.read(databaseProvider.future);
+    final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+    if (results.isNotEmpty) {
+      final profile = results.first;
+      await prefs.setString('user_role_${user.id}', profile['role']?.toString() ?? 'student');
+      await prefs.setString('user_name_${user.id}', profile['full_name']?.toString() ?? 'User');
+      return profile;
     }
   } catch (e) {
-    debugPrint('Initial profile query error: $e');
-    final metadata = user.userMetadata ?? {};
-    final initialProfile = {
-      'id': user.id,
-      'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
-      'role': metadata['role'] ?? 'student',
-    };
-    lastValue = initialProfile;
-    yield initialProfile;
+    debugPrint('Local SQLite profile check failed: $e');
   }
 
-  while (true) {
-    try {
-      final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
-      if (results.isNotEmpty) {
-        final current = results.first;
-        if (!_areMapsEqual(current, lastValue)) {
-          lastValue = current;
-          yield current;
-        }
-      } else {
-        // Only yield metadata-based profile if DB is completely empty for this user
-        final metadata = user.userMetadata ?? {};
-        final initialProfile = {
-          'id': user.id,
-          'full_name': metadata['full_name'] ?? metadata['name'] ?? 'User',
-          'role': metadata['role'] ?? 'student',
-        };
-        if (!_areMapsEqual(initialProfile, lastValue)) {
-          lastValue = initialProfile;
-          yield initialProfile;
-        }
+  // 3️⃣ THIRD: If cache/local DB is empty, fetch from Supabase (with timeout)
+  try {
+    debugPrint('🔍 No cache or local SQLite row, fetching from Supabase...');
+    final response = await Supabase.instance.client
+        .from('profiles')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle()
+        .timeout(const Duration(seconds: 3)); // ⏱️ 3 seconds max!
+
+    if (response != null) {
+      // Save to cache for next time
+      await prefs.setString('user_role_${user.id}', response['role'] ?? 'student');
+      await prefs.setString('user_name_${user.id}', response['full_name'] ?? '');
+
+      // Also insert into local SQLite DB to keep it in sync
+      try {
+        final db = await ref.read(databaseProvider.future);
+        final Map<String, dynamic> localProfile = Map<String, dynamic>.from(response);
+        localProfile['is_dirty'] = 0;
+        localProfile['is_deleted'] = 0;
+        await db.insert('profiles', localProfile, conflictAlgorithm: ConflictAlgorithm.replace);
+      } catch (e) {
+        debugPrint('Failed to save profile response to SQLite: $e');
       }
-    } catch (e) {
-      debugPrint('Profile fetch error: $e');
-    }
 
-    if (isFirstRun) {
-      isFirstRun = false;
-      await Future.delayed(const Duration(milliseconds: 500));
-    } else {
-      await Future.delayed(syncInterval);
+      debugPrint('✅ Profile cached successfully.');
+      return response;
     }
+  } catch (e) {
+    debugPrint('Supabase profile fetch failed: $e');
   }
+
+  // 4️⃣ FOURTH: Use auth metadata or default "student" role as fallback
+  final metadata = user.userMetadata ?? {};
+  final String fallbackRole = metadata['role'] ?? 'student';
+  final String fallbackName = metadata['full_name'] ?? metadata['name'] ?? 'User';
+
+  await prefs.setString('user_role_${user.id}', fallbackRole);
+  await prefs.setString('user_name_${user.id}', fallbackName);
+
+  return {
+    'id': user.id,
+    'role': fallbackRole,
+    'full_name': fallbackName,
+  };
 });
 
 final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, studentId) async* {

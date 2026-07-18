@@ -161,6 +161,11 @@ class AuthRepository {
 
             await db.insert('profiles', localData, conflictAlgorithm: ConflictAlgorithm.replace);
             debugPrint('Cloud profile cached locally for offline use.');
+
+            // Cache in SharedPreferences for instant 0ms startup
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('user_role_${response.user!.id}', remoteProfile['role']?.toString() ?? 'student');
+            await prefs.setString('user_name_${response.user!.id}', remoteProfile['full_name']?.toString() ?? 'User');
           } else {
             // Fallback: just update email and hash if remote profile isn't found yet
             await db.update(
@@ -211,6 +216,12 @@ class AuthRepository {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('offline_user_email', email);
 
+          final localId = localUser.first['id']?.toString() ?? '';
+          if (localId.isNotEmpty) {
+            await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
+            await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
+          }
+
           throw 'OFFLINE_MODE_RECOVERED';
         }
 
@@ -225,6 +236,13 @@ class AuthRepository {
     // 1. Clear SharedPreferences markers
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('offline_user_email');
+
+    // Clear role/name cache
+    final user = _client.auth.currentUser;
+    if (user != null) {
+      await prefs.remove('user_role_${user.id}');
+      await prefs.remove('user_name_${user.id}');
+    }
 
     // 2. Clear Auth from Supabase (Local-only operation if offline)
     await _client.auth.signOut();
