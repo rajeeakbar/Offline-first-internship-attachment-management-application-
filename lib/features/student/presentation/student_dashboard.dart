@@ -1,5 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:internship_app/features/auth/data/auth_repository.dart';
 import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
@@ -556,28 +559,74 @@ class _SupervisorSelectionScreenState
       _isSearching = true;
       _staffList = [];
     });
-    final supabase = sb.Supabase.instance.client;
 
     try {
-      final queryBuilder = supabase.from('profiles').select();
-
-      final results = await queryBuilder
-          .eq('role', _activeRole)
-          .ilike('full_name', '%$query%')
-          .order('full_name');
+      // 1. Search local SQLite DB first (instant, 100% offline-first)
+      final db = await LocalDatabase.instance.database;
+      final localResults = await db.query(
+        'profiles',
+        where: 'role = ? AND full_name LIKE ?',
+        whereArgs: [_activeRole, '%$query%'],
+        orderBy: 'full_name',
+      );
 
       if (mounted) {
         setState(() {
-          _staffList = List<Map<String, dynamic>>.from(results);
+          _staffList = List<Map<String, dynamic>>.from(localResults);
+          if (localResults.isNotEmpty) {
+            _isSearching = false;
+          }
+        });
+      }
+
+      // 2. Try fetching from Supabase in background to refresh local DB
+      final supabase = sb.Supabase.instance.client;
+      final remoteResults = await supabase
+          .from('profiles')
+          .select()
+          .eq('role', _activeRole)
+          .ilike('full_name', '%$query%')
+          .order('full_name')
+          .timeout(const Duration(seconds: 3)); // Fast timeout so we don't hang if offline/poor connection
+
+      // Cache the fetched profiles in local SQLite (but respect offline wins)
+      for (var remoteStaff in remoteResults) {
+        final existing = localResults.firstWhere((element) => element['id'] == remoteStaff['id'], orElse: () => {});
+        if (existing.isNotEmpty && (existing['is_dirty'] ?? 0) == 1) {
+          continue; // Respect offline wins
+        }
+        await db.insert('profiles', {
+          ...remoteStaff,
+          'is_dirty': 0,
+          'is_deleted': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      // Reload local search list to include newly found cloud staff
+      final updatedLocalResults = await db.query(
+        'profiles',
+        where: 'role = ? AND full_name LIKE ?',
+        whereArgs: [_activeRole, '%$query%'],
+        orderBy: 'full_name',
+      );
+
+      if (mounted) {
+        setState(() {
+          _staffList = List<Map<String, dynamic>>.from(updatedLocalResults);
           _isSearching = false;
         });
       }
     } catch (e) {
+      debugPrint('Staff search background sync / local fallback: $e');
       if (mounted) {
-        setState(() => _isSearching = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Search failed: $e')),
-        );
+        setState(() {
+          _isSearching = false;
+        });
+        if (_staffList.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Offline: Showing cached staff directory.')),
+          );
+        }
       }
     }
   }
@@ -603,7 +652,7 @@ class _SupervisorSelectionScreenState
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
-      // Update locally
+      // 1. Update locally first (Offline wins / Offline-first priority!)
       await db.update('profiles', {
         'supervisor_id': _selectedAcademic!['id'],
         'industry_supervisor_id': _selectedIndustry!['id'],
@@ -611,16 +660,31 @@ class _SupervisorSelectionScreenState
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
 
-      // Update remote
-      await sb.Supabase.instance.client
-          .from('profiles')
-          .update({
-            'supervisor_id': _selectedAcademic!['id'],
-            'industry_supervisor_id': _selectedIndustry!['id'],
-            'updated_at': now,
-          })
-          .eq('id', user.id);
+      // 2. Fetch full updated profile and cache as complete JSON in SharedPreferences for 0ms loading time
+      final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+      if (results.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user_profile_json_${user.id}', json.encode(results.first));
+        await prefs.setString('user_role_${user.id}', results.first['role']?.toString() ?? 'student');
+        await prefs.setString('user_name_${user.id}', results.first['full_name']?.toString() ?? 'User');
+      }
 
+      // 3. Attempt remote update non-blocking (gracefully handle if offline)
+      try {
+        await sb.Supabase.instance.client
+            .from('profiles')
+            .update({
+              'supervisor_id': _selectedAcademic!['id'],
+              'industry_supervisor_id': _selectedIndustry!['id'],
+              'updated_at': now,
+            })
+            .eq('id', user.id)
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        debugPrint('Onboarding remote update deferred (offline/poor connection): $e');
+      }
+
+      // Invalidate the profile provider so the app loads the new dashboard state instantly
       ref.read(syncServiceProvider).syncData();
       ref.invalidate(userProfileProvider);
 

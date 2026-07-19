@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -76,6 +77,7 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
           final profile = results.first;
           await prefs.setString('user_role_${profile['id']}', profile['role']?.toString() ?? 'student');
           await prefs.setString('user_name_${profile['id']}', profile['full_name']?.toString() ?? 'User');
+          await prefs.setString('user_profile_json_${profile['id']}', json.encode(profile));
           return profile;
         }
       } catch (e) {
@@ -85,29 +87,31 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     return null;
   }
 
-  // 1️⃣ FIRST: Try to load from local SharedPreferences cache (instant!)
+  // 1️⃣ FIRST: Try to load from local complete SharedPreferences JSON cache (instant, robust & offline wins!)
   final prefs = await SharedPreferences.getInstance();
-  final cachedRole = prefs.getString('user_role_${user.id}');
-  final cachedName = prefs.getString('user_name_${user.id}');
-
-  if (cachedRole != null) {
-    debugPrint('✅ Loaded role from cache: $cachedRole');
-    return {
-      'id': user.id,
-      'role': cachedRole,
-      'full_name': cachedName ?? 'User',
-    };
+  final cachedProfileJson = prefs.getString('user_profile_json_${user.id}');
+  if (cachedProfileJson != null) {
+    try {
+      final Map<String, dynamic> profile = json.decode(cachedProfileJson) as Map<String, dynamic>;
+      debugPrint('✅ Loaded complete profile from SharedPreferences JSON cache.');
+      return profile;
+    } catch (e) {
+      debugPrint('Error decoding cached profile JSON: $e');
+    }
   }
 
-  // 2️⃣ SECOND: Try local SQLite DB (instant fallback if no prefs cache yet)
+  // 2️⃣ SECOND: Try local SQLite DB (instant fallback if no prefs JSON cache yet)
+  Map<String, dynamic>? localProfile;
   try {
     final db = await ref.read(databaseProvider.future);
     final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
     if (results.isNotEmpty) {
-      final profile = results.first;
-      await prefs.setString('user_role_${user.id}', profile['role']?.toString() ?? 'student');
-      await prefs.setString('user_name_${user.id}', profile['full_name']?.toString() ?? 'User');
-      return profile;
+      localProfile = results.first;
+      await prefs.setString('user_role_${user.id}', localProfile['role']?.toString() ?? 'student');
+      await prefs.setString('user_name_${user.id}', localProfile['full_name']?.toString() ?? 'User');
+      await prefs.setString('user_profile_json_${user.id}', json.encode(localProfile));
+      debugPrint('✅ Loaded profile from SQLite and serialized to JSON cache.');
+      return localProfile;
     }
   } catch (e) {
     debugPrint('Local SQLite profile check failed: $e');
@@ -127,14 +131,15 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       // Save to cache for next time
       await prefs.setString('user_role_${user.id}', response['role'] ?? 'student');
       await prefs.setString('user_name_${user.id}', response['full_name'] ?? '');
+      await prefs.setString('user_profile_json_${user.id}', json.encode(response));
 
       // Also insert into local SQLite DB to keep it in sync
       try {
         final db = await ref.read(databaseProvider.future);
-        final Map<String, dynamic> localProfile = Map<String, dynamic>.from(response);
-        localProfile['is_dirty'] = 0;
-        localProfile['is_deleted'] = 0;
-        await db.insert('profiles', localProfile, conflictAlgorithm: ConflictAlgorithm.replace);
+        final Map<String, dynamic> localProfileData = Map<String, dynamic>.from(response);
+        localProfileData['is_dirty'] = 0;
+        localProfileData['is_deleted'] = 0;
+        await db.insert('profiles', localProfileData, conflictAlgorithm: ConflictAlgorithm.replace);
       } catch (e) {
         debugPrint('Failed to save profile response to SQLite: $e');
       }
@@ -151,14 +156,17 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final String fallbackRole = metadata['role'] ?? 'student';
   final String fallbackName = metadata['full_name'] ?? metadata['name'] ?? 'User';
 
-  await prefs.setString('user_role_${user.id}', fallbackRole);
-  await prefs.setString('user_name_${user.id}', fallbackName);
-
-  return {
+  final fallbackProfile = {
     'id': user.id,
     'role': fallbackRole,
     'full_name': fallbackName,
   };
+
+  await prefs.setString('user_role_${user.id}', fallbackRole);
+  await prefs.setString('user_name_${user.id}', fallbackName);
+  await prefs.setString('user_profile_json_${user.id}', json.encode(fallbackProfile));
+
+  return fallbackProfile;
 });
 
 final studentLogsProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, studentId) async* {
