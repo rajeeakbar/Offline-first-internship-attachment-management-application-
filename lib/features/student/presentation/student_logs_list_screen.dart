@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/providers.dart';
-import 'log_entry_form.dart';
 
 class StudentLogsListScreen extends ConsumerWidget {
   const StudentLogsListScreen({super.key});
@@ -74,28 +73,6 @@ class StudentLogsListScreen extends ConsumerWidget {
                           _buildSection('Work Description', log['work_description']),
                           const SizedBox(height: 12),
                           _buildSection('Knowledge Acquired', log['knowledge_acquired']),
-                          if (log['status'] == 'rejected') ...[
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => LogEntryForm(logToEdit: log),
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.edit_note, size: 20),
-                              label: const Text('Edit & Resubmit Log'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.colorScheme.primaryContainer,
-                                foregroundColor: theme.colorScheme.primary,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
-                          ],
                           if (log['recommendation'] != null && log['recommendation'].toString().isNotEmpty) ...[
                             const SizedBox(height: 16),
                             Container(

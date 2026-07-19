@@ -92,32 +92,5 @@ The `AIService` leverages heuristic-based professionalization to help students t
 ### **6. Secure Sign Out**
 - **Sign Out**: Users can securely sign out via the main drawer. This wipes the active session and returns the user to the login screen, ensuring data privacy on shared devices.
 
-## ⚡ Supabase Edge Functions Deployment
-
-The application features a custom, secure OTP (One-Time Password) reset workflow for forgotten passwords using Supabase Edge Functions. The deployment is fully prepared under `supabase/functions/send-reset-otp`.
-
-### Prerequisites
-1. Ensure the [Supabase CLI](https://supabase.com/docs/guides/cli) is installed and authorized:
-   ```bash
-   supabase login
-   ```
-2. Initialize Supabase in your project if you haven't already:
-   ```bash
-   supabase init
-   ```
-
-### Deployment Steps
-To deploy the `send-reset-otp` function to your live Supabase project, execute the following command in the repository root directory:
-```bash
-supabase functions deploy send-reset-otp --project-ref pbxumeocnpqqtiwlvrhm
-```
-
-### Environment Variables Config
-The function uses NodeMailer or direct SMTP configurations (such as Resend or SendGrid) to deliver verification codes securely. Make sure to set up your SMTP or email service provider credentials in your Supabase project settings under:
-**Project Settings -> Auth -> Email Templates** or via the Supabase CLI secrets command:
-```bash
-supabase secrets set SMTP_HOST=your_smtp_host SMTP_USER=your_smtp_user SMTP_PASS=your_smtp_password
-```
-
 ---
 *Built with ❤️ to empower the next generation of professionals.*
