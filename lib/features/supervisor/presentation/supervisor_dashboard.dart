@@ -624,7 +624,7 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () => _showReviewDialog(log),
-                                  child: const Text('Review & Sign Off'),
+                                  child: const Text('Review & Decide'),
                                 ),
                               ),
                           ],
@@ -691,9 +691,9 @@ class _StudentLogsReviewScreenState extends ConsumerState<StudentLogsReviewScree
                       initialValue: status,
                       decoration: const InputDecoration(labelText: 'Action'),
                       items: const [
-                        DropdownMenuItem(value: 'approved', child: Text('Approve / Sign Off')),
+                        DropdownMenuItem(value: 'approved', child: Text('Approve Pending')),
                         DropdownMenuItem(value: 'pending', child: Text('Keep Pending')),
-                        DropdownMenuItem(value: 'rejected', child: Text('Reject / Requires Revision')),
+                        DropdownMenuItem(value: 'rejected', child: Text('Reject')),
                       ],
                       onChanged: (val) => setDialogState(() => status = val!),
                     ),
