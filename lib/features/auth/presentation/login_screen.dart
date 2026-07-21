@@ -211,6 +211,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     bool isSending = false;
     bool showOtpFields = false;
     String? errorMessage;
+    String? retrievedOtp;
 
     showDialog(
       context: context,
@@ -228,6 +229,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ? 'Enter the 6-digit code sent to ${resetEmailController.text} and your new password.'
                     : 'Enter your email address to receive a password reset code.'),
                   const SizedBox(height: 16),
+                  if (showOtpFields && retrievedOtp != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '🔑 DEVELOPMENT OTP CODE:',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.orange),
+                          ),
+                          const SizedBox(height: 4),
+                          SelectableText(
+                            retrievedOtp!,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 2),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   if (!showOtpFields)
                     TextField(
                       controller: resetEmailController,
@@ -286,11 +313,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                         try {
                           if (!showOtpFields) {
-                            await ref.read(authRepositoryProvider).resetPassword(email);
+                            final otp = await ref.read(authRepositoryProvider).resetPassword(email);
                             if (context.mounted) {
                               setDialogState(() {
                                 isSending = false;
                                 showOtpFields = true;
+                                retrievedOtp = otp;
                               });
                             }
                           } else {
