@@ -61,7 +61,6 @@ class AuthRepository {
         // Create a profile record in the public.profiles table
         final profileData = {
           'id': response.user!.id,
-          'email': email,
           'full_name': fullName,
           'role': role,
           'student_id_number': studentId,
@@ -71,10 +70,11 @@ class AuthRepository {
         };
         await _client.from('profiles').upsert(profileData);
 
-        // Also cache locally with password hash for offline login
+        // Also cache locally with password hash and email for offline login
         final db = await LocalDatabase.instance.database;
         await db.insert('profiles', {
           ...profileData,
+          'email': email,
           'password_hash': passwordHash,
           'is_dirty': 0,
           'is_deleted': 0,
@@ -120,6 +120,14 @@ class AuthRepository {
         // Store offline email so provider can "log in" the user
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('offline_user_email', email);
+        await prefs.setString('user_role_temp', role);
+        await prefs.setString('user_name_temp', fullName);
+        if (studentId != null) {
+          await prefs.setString('user_student_id_number_temp', studentId);
+        }
+        if (level != null) {
+          await prefs.setString('user_level_temp', level);
+        }
 
         throw 'OFFLINE_MODE_RECOVERED';
       }
@@ -166,6 +174,12 @@ class AuthRepository {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_role_${response.user!.id}', remoteProfile['role']?.toString() ?? 'student');
             await prefs.setString('user_name_${response.user!.id}', remoteProfile['full_name']?.toString() ?? 'User');
+            if (remoteProfile['student_id_number'] != null) {
+              await prefs.setString('user_student_id_number_${response.user!.id}', remoteProfile['student_id_number'].toString());
+            }
+            if (remoteProfile['level'] != null) {
+              await prefs.setString('user_level_${response.user!.id}', remoteProfile['level'].toString());
+            }
           } else {
             // Fallback: just update email and hash if remote profile isn't found yet
             await db.update(
@@ -220,6 +234,12 @@ class AuthRepository {
           if (localId.isNotEmpty) {
             await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
             await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
+            if (localUser.first['student_id_number'] != null) {
+              await prefs.setString('user_student_id_number_$localId', localUser.first['student_id_number'].toString());
+            }
+            if (localUser.first['level'] != null) {
+              await prefs.setString('user_level_$localId', localUser.first['level'].toString());
+            }
           }
 
           throw 'OFFLINE_MODE_RECOVERED';
@@ -264,7 +284,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> resetPassword(String email) async {
+  Future<String?> resetPassword(String email) async {
     try {
       final response = await _client.functions.invoke(
         'send-reset-otp',
@@ -273,6 +293,8 @@ class AuthRepository {
       if (response.status != 200) {
         throw response.data?['error'] ?? 'Failed to send reset code';
       }
+      // Return dev_otp if present in response
+      return response.data?['dev_otp']?.toString();
     } catch (e) {
       debugPrint('Password reset code request error: $e');
       rethrow;

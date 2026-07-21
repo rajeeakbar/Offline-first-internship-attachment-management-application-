@@ -72,6 +72,12 @@ class SyncService {
         data.remove('is_deleted');
         data.remove('local_path');
 
+        // Filter out local-only columns from payload to Supabase
+        if (remoteTable == 'profiles') {
+          data.remove('email');
+          data.remove('password_hash');
+        }
+
         if (isDeleted) {
           await _supabase.from(remoteTable).delete().eq('id', id);
           await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
@@ -115,6 +121,20 @@ class SyncService {
 
         remoteData['is_dirty'] = 0;
         remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
+
+        // Preserve local password_hash and email if they exist locally
+        if (localTable == 'profiles') {
+          final existing = await db.query('profiles', where: 'id = ?', whereArgs: [id]);
+          if (existing.isNotEmpty) {
+            final localProf = existing.first;
+            if (localProf['password_hash'] != null) {
+              remoteData['password_hash'] = localProf['password_hash'];
+            }
+            if (localProf['email'] != null) {
+              remoteData['email'] = localProf['email'];
+            }
+          }
+        }
 
         await db.insert(
           localTable,
