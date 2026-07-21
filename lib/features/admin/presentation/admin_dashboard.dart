@@ -7,6 +7,7 @@ import 'student_allocation_screen.dart';
 import 'company_management_screen.dart';
 import 'completion_metrics_screen.dart';
 import 'system_settings_screen.dart';
+import 'account_management_screen.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -79,6 +80,10 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             _buildMenuTile(theme, Icons.business_rounded, 'Company Profiles',
                 'Manage participating companies', onTap: () {
                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CompanyManagementScreen()));
+                }),
+            _buildMenuTile(theme, Icons.manage_accounts_rounded, 'Manage Accounts',
+                'View and delete user accounts', onTap: () {
+                   Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AccountManagementScreen()));
                 }),
             _buildMenuTile(theme, Icons.people_alt_rounded, 'Student Allocations',
                 'Match students to supervisors', onTap: () {

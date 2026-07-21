@@ -97,6 +97,8 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final cachedName = prefs.getString('user_name_${user.id}');
   final cachedStudentId = prefs.getString('user_student_id_number_${user.id}');
   final cachedLevel = prefs.getString('user_level_${user.id}');
+  final cachedSupervisorId = prefs.getString('user_supervisor_id_${user.id}');
+  final cachedIndustrySupervisorId = prefs.getString('user_industry_supervisor_id_${user.id}');
 
   if (cachedRole != null) {
     debugPrint('✅ Loaded role from cache: $cachedRole');
@@ -106,6 +108,8 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       'full_name': cachedName ?? 'User',
       'student_id_number': cachedStudentId,
       'level': cachedLevel,
+      'supervisor_id': cachedSupervisorId,
+      'industry_supervisor_id': cachedIndustrySupervisorId,
     };
   }
 
@@ -122,6 +126,16 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       }
       if (profile['level'] != null) {
         await prefs.setString('user_level_${user.id}', profile['level'].toString());
+      }
+      if (profile['supervisor_id'] != null) {
+        await prefs.setString('user_supervisor_id_${user.id}', profile['supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_supervisor_id_${user.id}');
+      }
+      if (profile['industry_supervisor_id'] != null) {
+        await prefs.setString('user_industry_supervisor_id_${user.id}', profile['industry_supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_industry_supervisor_id_${user.id}');
       }
       return profile;
     }
@@ -149,6 +163,16 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       if (response['level'] != null) {
         await prefs.setString('user_level_${user.id}', response['level'].toString());
       }
+      if (response['supervisor_id'] != null) {
+        await prefs.setString('user_supervisor_id_${user.id}', response['supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_supervisor_id_${user.id}');
+      }
+      if (response['industry_supervisor_id'] != null) {
+        await prefs.setString('user_industry_supervisor_id_${user.id}', response['industry_supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_industry_supervisor_id_${user.id}');
+      }
 
       // Also insert into local SQLite DB to keep it in sync
       try {
@@ -174,6 +198,8 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final String fallbackName = metadata['full_name'] ?? metadata['name'] ?? 'User';
   final String? fallbackStudentId = metadata['student_id_number'];
   final String? fallbackLevel = metadata['level'];
+  final String? fallbackSupervisorId = metadata['supervisor_id'];
+  final String? fallbackIndustrySupervisorId = metadata['industry_supervisor_id'];
 
   await prefs.setString('user_role_${user.id}', fallbackRole);
   await prefs.setString('user_name_${user.id}', fallbackName);
@@ -183,6 +209,12 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   if (fallbackLevel != null) {
     await prefs.setString('user_level_${user.id}', fallbackLevel);
   }
+  if (fallbackSupervisorId != null) {
+    await prefs.setString('user_supervisor_id_${user.id}', fallbackSupervisorId);
+  }
+  if (fallbackIndustrySupervisorId != null) {
+    await prefs.setString('user_industry_supervisor_id_${user.id}', fallbackIndustrySupervisorId);
+  }
 
   return {
     'id': user.id,
@@ -190,6 +222,8 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     'full_name': fallbackName,
     'student_id_number': fallbackStudentId,
     'level': fallbackLevel,
+    'supervisor_id': fallbackSupervisorId,
+    'industry_supervisor_id': fallbackIndustrySupervisorId,
   };
 });
 

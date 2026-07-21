@@ -9,6 +9,7 @@ import 'package:internship_app/core/services/main_drawer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:internship_app/features/student/presentation/student_logs_list_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
@@ -603,24 +604,39 @@ class _SupervisorSelectionScreenState
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
-      // Update locally
+      final supervisorId = _selectedAcademic!['id']?.toString() ?? '';
+      final industrySupervisorId = _selectedIndustry!['id']?.toString() ?? '';
+
+      // 1. Instantly save to SharedPreferences cache
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_supervisor_id_${user.id}', supervisorId);
+      await prefs.setString('user_industry_supervisor_id_${user.id}', industrySupervisorId);
+
+      // 2. Instantly update locally in SQLite
       await db.update('profiles', {
-        'supervisor_id': _selectedAcademic!['id'],
-        'industry_supervisor_id': _selectedIndustry!['id'],
+        'supervisor_id': supervisorId,
+        'industry_supervisor_id': industrySupervisorId,
         'updated_at': now,
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
 
-      // Update remote
-      await sb.Supabase.instance.client
+      // 3. Trigger remote update in background / non-blocking
+      sb.Supabase.instance.client
           .from('profiles')
           .update({
-            'supervisor_id': _selectedAcademic!['id'],
-            'industry_supervisor_id': _selectedIndustry!['id'],
+            'supervisor_id': supervisorId,
+            'industry_supervisor_id': industrySupervisorId,
             'updated_at': now,
           })
-          .eq('id', user.id);
+          .eq('id', user.id)
+          .then((_) {
+            debugPrint('Background onboarding update succeeded.');
+          })
+          .catchError((e) {
+            debugPrint('Background onboarding remote update failed (will sync later): $e');
+          });
 
+      // 4. Trigger sync and invalidate profile provider instantly
       ref.read(syncServiceProvider).syncData();
       ref.invalidate(userProfileProvider);
 
