@@ -85,6 +85,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Image.asset(
                   'assets/images/logo.png',
                   height: 100,
+                  color: theme.colorScheme.surface,
+                  colorBlendMode: BlendMode.multiply,
                   errorBuilder: (context, error, stackTrace) => const Icon(
                     Icons.business_center_rounded,
                     size: 80,

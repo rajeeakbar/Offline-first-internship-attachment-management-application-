@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/services/providers.dart';
+import 'log_entry_form.dart';
 
 class StudentLogsListScreen extends ConsumerWidget {
   const StudentLogsListScreen({super.key});
@@ -104,6 +105,28 @@ class StudentLogsListScreen extends ConsumerWidget {
                                     style: const TextStyle(fontStyle: FontStyle.italic),
                                   ),
                                 ],
+                              ),
+                            ),
+                          ],
+                          if (log['status'] == 'rejected') ...[
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => LogEntryForm(existingLog: log),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(Icons.edit_note, size: 20),
+                              label: const Text('Edit & Resubmit Log'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.primary,
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 44),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
                               ),
                             ),
                           ],
