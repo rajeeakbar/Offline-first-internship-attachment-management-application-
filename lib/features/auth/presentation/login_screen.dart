@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/providers.dart';
 import '../data/auth_repository.dart';
 import 'signup_screen.dart';
 
@@ -49,8 +50,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          // We no longer manually push RootNavigation.
-          // main.dart watches userProfileProvider and will switch automatically.
+          // Force Riverpod to instantly load cached/offline credentials and route to Dashboard
+          ref.invalidate(userProfileProvider);
         }
         return;
       }

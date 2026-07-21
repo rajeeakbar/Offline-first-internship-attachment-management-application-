@@ -56,15 +56,15 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
       final studentsRes = await supabase.from('profiles').select().eq('role', 'student');
       final supervisorsRes = await supabase.from('profiles').select().eq('role', 'academic_supervisor');
 
-      // Merge cloud data into local DB (respect offline wins: skip if local is dirty)
+      // Merge cloud data into local DB (respect offline wins: skip if local is dirty or deleted)
       for (var cloudStudent in studentsRes) {
-        final local = _students.firstWhere(
-          (s) => s['id'] == cloudStudent['id'],
-          orElse: () => {},
-        );
-        if (local.isNotEmpty && (local['is_dirty'] ?? 0) == 1) {
-          // Local is dirty – offline wins: keep local, don't overwrite
-          continue;
+        final existingLocal = await db.query('profiles', where: 'id = ?', whereArgs: [cloudStudent['id']]);
+        if (existingLocal.isNotEmpty) {
+          final local = existingLocal.first;
+          if ((local['is_dirty'] ?? 0) == 1 || (local['is_deleted'] ?? 0) == 1) {
+            // Local is dirty or deleted – offline wins: keep local, don't overwrite
+            continue;
+          }
         }
         // Update local DB with cloud data
         await db.insert('profiles', {
@@ -76,6 +76,13 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
 
       // Also update supervisors similarly
       for (var cloudSup in supervisorsRes) {
+        final existingLocal = await db.query('profiles', where: 'id = ?', whereArgs: [cloudSup['id']]);
+        if (existingLocal.isNotEmpty) {
+          final local = existingLocal.first;
+          if ((local['is_dirty'] ?? 0) == 1 || (local['is_deleted'] ?? 0) == 1) {
+            continue;
+          }
+        }
         await db.insert('profiles', {
           ...cloudSup,
           'is_dirty': 0,
