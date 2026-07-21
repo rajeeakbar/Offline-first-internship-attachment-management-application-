@@ -8,6 +8,7 @@ import 'package:internship_app/features/admin/presentation/admin_dashboard.dart'
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/auth/data/auth_repository.dart';
 import 'core/services/providers.dart';
+import 'core/services/reset_password_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
