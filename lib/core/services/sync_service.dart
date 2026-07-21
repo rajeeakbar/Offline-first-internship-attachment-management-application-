@@ -128,46 +128,50 @@ class SyncService {
   }
 
   Future<void> _syncMedia(Database db) async {
-    final dirtyMedia = await db.query('media_attachments', where: 'is_dirty = ?', whereArgs: [1]);
+    try {
+      final dirtyMedia = await db.query('media_attachments', where: 'is_dirty = ?', whereArgs: [1]);
 
-    for (var media in dirtyMedia) {
-      try {
-        // High-performance runtime casting to maintain robust type safety and avoid redundant parsing
-        final String id = media['id'] as String;
-        final String localPath = media['local_path'] as String;
-        final String logId = media['log_id'] as String;
+      for (var media in dirtyMedia) {
+        try {
+          // Robust, null-safe type casting and conversion with default fallbacks to prevent runtime crashes
+          final String id = media['id']?.toString() ?? '';
+          final String localPath = media['local_path']?.toString() ?? '';
+          final String logId = media['log_id']?.toString() ?? '';
 
-        if (id.isEmpty) continue;
+          if (id.isEmpty) continue;
 
-        if (media['is_deleted']?.toString() == '1') {
-          await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);
-          continue;
-        }
-
-        if (media['remote_url'] == null) {
-          final file = File(localPath);
-          if (await file.exists()) {
-            final fileName = '$logId/${id.split('-').last}';
-            await _supabase.storage.from('logs').upload(fileName, file);
-
-            final String publicUrl = _supabase.storage.from('logs').getPublicUrl(fileName);
-
-            await db.update('media_attachments', {
-              'remote_url': publicUrl,
-              'is_dirty': 0,
-            }, where: 'id = ?', whereArgs: [id]);
-
-            final Map<String, dynamic> remoteMedia = Map.from(media);
-            remoteMedia['remote_url'] = publicUrl;
-            remoteMedia.remove('is_dirty');
-            remoteMedia.remove('is_deleted');
-            remoteMedia.remove('local_path'); // Local path not needed in cloud
-            await _supabase.from('media_attachments').upsert(remoteMedia);
+          if (media['is_deleted']?.toString() == '1') {
+            await db.delete('media_attachments', where: 'id = ?', whereArgs: [id]);
+            continue;
           }
+
+          if (media['remote_url'] == null && localPath.isNotEmpty) {
+            final file = File(localPath);
+            if (await file.exists()) {
+              final fileName = '$logId/${id.split('-').last}';
+              await _supabase.storage.from('logs').upload(fileName, file);
+
+              final String publicUrl = _supabase.storage.from('logs').getPublicUrl(fileName);
+
+              await db.update('media_attachments', {
+                'remote_url': publicUrl,
+                'is_dirty': 0,
+              }, where: 'id = ?', whereArgs: [id]);
+
+              final Map<String, dynamic> remoteMedia = Map.from(media);
+              remoteMedia['remote_url'] = publicUrl;
+              remoteMedia.remove('is_dirty');
+              remoteMedia.remove('is_deleted');
+              remoteMedia.remove('local_path'); // Local path not needed in cloud
+              await _supabase.from('media_attachments').upsert(remoteMedia);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error syncing individual media item: $e');
         }
-      } catch (e) {
-        debugPrint('Error syncing media: $e');
       }
+    } catch (e) {
+      debugPrint('Error querying or syncing media_attachments: $e');
     }
   }
 }
