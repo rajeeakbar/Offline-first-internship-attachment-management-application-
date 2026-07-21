@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/services/local_database.dart';
 
 final authRepositoryProvider = Provider((ref) => AuthRepository(Supabase.instance.client));
@@ -42,6 +43,43 @@ class AuthRepository {
   }) async {
     final now = DateTime.now().toIso8601String();
     final passwordHash = _hashPassword(password);
+
+    // Instant offline signup detection
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Instant offline signup activated for $email');
+      final db = await LocalDatabase.instance.database;
+      final tempId = 'temp_${const Uuid().v4()}';
+
+      await db.insert('profiles', {
+        'id': tempId,
+        'email': email,
+        'password_hash': passwordHash,
+        'full_name': fullName,
+        'role': role,
+        'student_id_number': studentId,
+        'level': level,
+        'status': 'pending_sync',
+        'updated_at': now,
+        'is_dirty': 1,
+        'is_deleted': 0,
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_user_email', email);
+      await prefs.setString('user_role_temp', role);
+      await prefs.setString('user_name_temp', fullName);
+      if (studentId != null) {
+        await prefs.setString('user_student_id_number_temp', studentId);
+      }
+      if (level != null) {
+        await prefs.setString('user_level_temp', level);
+      }
+
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
 
     try {
       debugPrint('Attempting signup for $email');
@@ -173,6 +211,15 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
+    // Instant offline login detection
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Instant offline login activated for $email');
+      return await _offlineSignInFallback(email, password);
+    }
+
     try {
       debugPrint('Attempting signin for $email');
       // Tightened timeout to trigger offline fallback faster

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
 import '../../features/auth/data/auth_repository.dart';
@@ -145,6 +146,14 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 
   // 3️⃣ THIRD: If cache/local DB is empty, fetch from Supabase (with timeout)
   try {
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Skipping cloud profile fetch: Device is offline.');
+      throw Exception('Device is offline');
+    }
+
     debugPrint('🔍 No cache or local SQLite row, fetching from Supabase...');
     final response = await Supabase.instance.client
         .from('profiles')

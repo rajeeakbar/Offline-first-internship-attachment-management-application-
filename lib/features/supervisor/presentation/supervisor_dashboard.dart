@@ -272,23 +272,27 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
     final db = await LocalDatabase.instance.database;
     final now = DateTime.now().toIso8601String();
 
-    // Update local
+    // Update local first (Offline-First)
     await db.update('profiles', {
       widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
       'updated_at': now,
       'is_dirty': 1,
     }, where: 'id = ?', whereArgs: [studentId]);
 
-    // Update remote
-    await sb.Supabase.instance.client
+    // Trigger non-blocking remote write to background
+    sb.Supabase.instance.client
         .from('profiles')
         .update({
           widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
           'updated_at': now,
         })
-        .eq('id', studentId);
+        .eq('id', studentId)
+        .then((_) => debugPrint('Background remote unassignment completed.'))
+        .catchError((e) => debugPrint('Background remote unassignment failed (will sync later): $e'));
 
+    // Soft sync and invalidate
     ref.read(syncServiceProvider).syncData();
+    ref.invalidate(supervisorStudentsProvider(widget.isAcademic));
   }
 
   void _viewStudentLogs(Map<String, dynamic> student) {
@@ -370,17 +374,19 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
         'is_dirty': 1,
       };
 
-      // 1. Update local DB
+      // 1. Update local DB (Instant)
       await db.update('profiles', updateData, where: 'id = ?', whereArgs: [student['id']]);
 
-      // 2. Update remote DB
-      await sb.Supabase.instance.client
+      // 2. Update remote DB in background / non-blocking
+      sb.Supabase.instance.client
           .from('profiles')
           .update({
             updateField: assign ? currentUser.id : null,
             'updated_at': now,
           })
-          .eq('id', student['id']);
+          .eq('id', student['id'])
+          .then((_) => debugPrint('Background student assignment toggle succeeded.'))
+          .catchError((e) => debugPrint('Background student assignment toggle failed: $e'));
 
       // 3. Trigger sync and invalidate profile to update state
       ref.read(syncServiceProvider).syncData();

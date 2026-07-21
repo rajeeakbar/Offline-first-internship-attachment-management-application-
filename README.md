@@ -41,9 +41,10 @@ Our `SyncService` implements a robust hybrid strategy:
 - **Reliability**: Includes a 3-tier retry mechanism with exponential backoff.
 
 #### **💡 Important Note on Offline Usage**
-- **Authentication**: Initial account creation **requires an active internet connection**. However, once a user has successfully logged in once on a device, the system caches their profile.
-- **Cached Login**: In case of no internet, the app supports a **Cached Login** mode. If the entered email matches a previously logged-in user on the device, the app allows access to the dashboard in offline mode.
-- **Post-Login**: Once logged in, you can create, edit, and view logs entirely offline. Data will automatically synchronize when internet access is restored.
+- **Authentication**: Initial account creation **requires an active internet connection**. However, once a user has successfully logged in once on a device, the system caches their credentials locally.
+- **Cached Login (Offline Wins! ⚡)**: The application utilizes a highly optimized **"Offline Wins"** architecture. Launching the app offline instantly routes previously authenticated users straight to their dashboard (0ms startup latency) without any loading hangs or timeouts. On the login screen, offline attempts bypass online timeouts completely and verify credentials instantly against local DB caches.
+- **Post-Login**: Once logged in, students, supervisors, and admins can perform daily logging, view histories, edit profiles, assign/unassign supervisors, and manage students completely offline.
+- **Non-blocking Operations**: All supervisor unassignment and student roster toggles operate in an offline-first, non-blocking flow. They execute immediately on local databases and safely schedule background/sync queue operations.
 - **Manual Sync**: You can also trigger a manual synchronization by clicking the sync icon on the dashboard or using "Pull-to-refresh".
 
 ### **AI-Powered Productivity**
