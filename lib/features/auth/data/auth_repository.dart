@@ -135,6 +135,40 @@ class AuthRepository {
     }
   }
 
+  Future<AuthResponse> _offlineSignInFallback(String email, String password) async {
+    // Try to verify if this user exists in our local cache
+    final db = await LocalDatabase.instance.database;
+    final passwordHash = _hashPassword(password);
+
+    final localUser = await db.query(
+      'profiles',
+      where: 'email = ? AND password_hash = ?',
+      whereArgs: [email, passwordHash]
+    );
+
+    if (localUser.isNotEmpty) {
+      // Store the offline email for providers to find the right profile
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_user_email', email);
+
+      final localId = localUser.first['id']?.toString() ?? '';
+      if (localId.isNotEmpty) {
+        await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
+        await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
+        if (localUser.first['student_id_number'] != null) {
+          await prefs.setString('user_student_id_number_$localId', localUser.first['student_id_number'].toString());
+        }
+        if (localUser.first['level'] != null) {
+          await prefs.setString('user_level_$localId', localUser.first['level'].toString());
+        }
+      }
+
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
+
+    throw 'Invalid credentials or network error. Please connect to the internet for the first sign-in.';
+  }
+
   Future<AuthResponse> signIn({
     required String email,
     required String password,
@@ -163,6 +197,7 @@ class AuthRepository {
 
           if (remoteProfile != null) {
             final Map<String, dynamic> localData = Map<String, dynamic>.from(remoteProfile);
+            localData['email'] = email; // PRESERVE EMAIL FOR OFFLINE SIGN-IN!
             localData['password_hash'] = passwordHash;
             localData['is_dirty'] = 0;
             localData['is_deleted'] = 0;
@@ -197,6 +232,24 @@ class AuthRepository {
       return response;
     } on AuthException catch (e) {
       debugPrint('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
+      final errStr = e.message.toLowerCase();
+      // Broad check for connection-related errors in wrapped AuthException
+      if (errStr.contains('socketexception') ||
+          errStr.contains('connection') ||
+          errStr.contains('clientexception') ||
+          errStr.contains('handshakeexception') ||
+          errStr.contains('network') ||
+          errStr.contains('unreachable') ||
+          errStr.contains('no address') ||
+          errStr.contains('failed host lookup') ||
+          errStr.contains('not connected') ||
+          errStr.contains('disconnected') ||
+          errStr.contains('timeout') ||
+          errStr.contains('software caused connection abort') ||
+          e.statusCode == '0' ||
+          e.statusCode == null) {
+        return await _offlineSignInFallback(email, password);
+      }
       rethrow;
     } catch (e) {
       debugPrint('Connection error or other: $e');
@@ -214,38 +267,7 @@ class AuthRepository {
           errStr.contains('disconnected') ||
           errStr.contains('timeout') ||
           errStr.contains('software caused connection abort')) {
-
-        // Try to verify if this user exists in our local cache
-        final db = await LocalDatabase.instance.database;
-        final passwordHash = _hashPassword(password);
-
-        final localUser = await db.query(
-          'profiles',
-          where: 'email = ? AND password_hash = ?',
-          whereArgs: [email, passwordHash]
-        );
-
-        if (localUser.isNotEmpty) {
-          // Store the offline email for providers to find the right profile
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('offline_user_email', email);
-
-          final localId = localUser.first['id']?.toString() ?? '';
-          if (localId.isNotEmpty) {
-            await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
-            await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
-            if (localUser.first['student_id_number'] != null) {
-              await prefs.setString('user_student_id_number_$localId', localUser.first['student_id_number'].toString());
-            }
-            if (localUser.first['level'] != null) {
-              await prefs.setString('user_level_$localId', localUser.first['level'].toString());
-            }
-          }
-
-          throw 'OFFLINE_MODE_RECOVERED';
-        }
-
-        throw 'Invalid credentials or network error. Please connect to the internet for the first sign-in.';
+        return await _offlineSignInFallback(email, password);
       }
       rethrow;
     }
