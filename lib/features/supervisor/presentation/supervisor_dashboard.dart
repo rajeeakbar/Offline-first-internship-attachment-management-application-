@@ -21,6 +21,8 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final studentsAsync = ref.watch(supervisorStudentsProvider(widget.isAcademic));
+    final profile = ref.watch(userProfileProvider).value;
+    final isApproved = profile?['status'] == 'approved';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -63,6 +65,44 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
           data: (students) => CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              if (!isApproved)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Card(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.hourglass_empty_rounded, color: Colors.orange, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Supervisor Pending Approval',
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your profile is awaiting administrator approval. Log evaluations and student reviews are currently disabled.',
+                                    style: TextStyle(color: Colors.grey[800], fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               SliverPadding(
                 padding: const EdgeInsets.all(20),
                 sliver: SliverToBoxAdapter(

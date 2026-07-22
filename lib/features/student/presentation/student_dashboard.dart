@@ -123,6 +123,41 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                       ),
                     ],
                   ),
+                  if (profile?['status'] != 'approved') ...[
+                    const SizedBox(height: 16),
+                    Card(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.hourglass_empty_rounded, color: Colors.orange, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Account Pending Approval',
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your registration is awaiting administrator approval. Logbook submission is currently disabled.',
+                                    style: TextStyle(color: Colors.grey[800], fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   _buildSummaryCard(theme),
                   const SizedBox(height: 24),
@@ -153,13 +188,15 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               ),
             ),
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _createNewLogEntry,
-            backgroundColor: theme.colorScheme.primary,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add),
-            label: const Text('New Daily Log'),
-          ),
+          floatingActionButton: profile?['status'] != 'approved'
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: _createNewLogEntry,
+                  backgroundColor: theme.colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: const Text('New Daily Log'),
+                ),
         );
       },
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -228,6 +265,16 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               onPressed: () {
                 final profile = ref.read(userProfileProvider).value;
                 if (profile != null) {
+                  if (profile['status'] != 'approved') {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('⚠️ Logbook exports are disabled until your account is approved.'),
+                        backgroundColor: Colors.orange,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
                   PdfExportService.generateStudentLogReport(
                     profile['id'],
                     profile['full_name'] ?? 'Student',
@@ -253,6 +300,32 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 
   Widget _buildLogsList(ThemeData theme) {
+    final profile = ref.watch(userProfileProvider).value;
+    final isApproved = profile?['status'] == 'approved';
+
+    if (!isApproved) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 40),
+        alignment: Alignment.center,
+        child: Column(
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 64,
+              color: theme.colorScheme.onSurface.withOpacity(0.1),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No logs submitted yet (Pending Approval)',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[500],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final logsAsync = ref.watch(currentUserLogsProvider);
 
     return logsAsync.when(
