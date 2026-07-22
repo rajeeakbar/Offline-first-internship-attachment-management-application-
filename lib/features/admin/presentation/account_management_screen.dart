@@ -82,6 +82,67 @@ class _AccountManagementScreenState extends ConsumerState<AccountManagementScree
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
+      // Retrieve user profile to check role and execute cascading deletions
+      final userProfiles = await db.query('profiles', where: 'id = ?', whereArgs: [id]);
+      if (userProfiles.isNotEmpty) {
+        final profile = userProfiles.first;
+        final role = profile['role']?.toString();
+
+        if (role == 'student') {
+          // Cascade deleted Student: soft delete their log entries and media attachments
+          await db.update(
+            'log_entries',
+            {
+              'is_deleted': 1,
+              'is_dirty': 1,
+              'updated_at': now,
+            },
+            where: 'student_id = ?',
+            whereArgs: [id],
+          );
+
+          // Get log ids to cascade delete media
+          final logRows = await db.query('log_entries', columns: ['id'], where: 'student_id = ?', whereArgs: [id]);
+          final List<String> logIds = logRows.map((row) => row['id'].toString()).toList();
+          for (var logId in logIds) {
+            await db.update(
+              'media_attachments',
+              {
+                'is_deleted': 1,
+                'is_dirty': 1,
+                'updated_at': now,
+              },
+              where: 'log_id = ?',
+              whereArgs: [logId],
+            );
+          }
+        } else if (role == 'academic_supervisor') {
+          // Cascade deleted Academic Supervisor: detach from all matching student profiles
+          await db.update(
+            'profiles',
+            {
+              'supervisor_id': null,
+              'is_dirty': 1,
+              'updated_at': now,
+            },
+            where: 'supervisor_id = ?',
+            whereArgs: [id],
+          );
+        } else if (role == 'industry_supervisor') {
+          // Cascade deleted Industry Supervisor: detach from all matching student profiles
+          await db.update(
+            'profiles',
+            {
+              'industry_supervisor_id': null,
+              'is_dirty': 1,
+              'updated_at': now,
+            },
+            where: 'industry_supervisor_id = ?',
+            whereArgs: [id],
+          );
+        }
+      }
+
       // Soft delete locally first, with dirty flag
       await db.update(
         'profiles',
