@@ -320,6 +320,14 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
     return;
   }
 
+  // Guard: If supervisor is not approved, return empty list (Empty Dashboard)
+  final profile = ref.watch(userProfileProvider).value;
+  final isApproved = profile?['status'] == 'approved';
+  if (!isApproved) {
+    yield [];
+    return;
+  }
+
   final db = await ref.read(databaseProvider.future);
   List<Map<String, dynamic>>? lastValue;
 
@@ -327,8 +335,8 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
     try {
       final results = await db.query(
         'profiles',
-        where: isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
-        whereArgs: [user.id],
+        where: '${isAcademic ? 'supervisor_id' : 'industry_supervisor_id'} = ? AND is_deleted = ?',
+        whereArgs: [user.id, 0],
       );
       if (!_areMapListsEqual(results, lastValue)) {
         lastValue = results;

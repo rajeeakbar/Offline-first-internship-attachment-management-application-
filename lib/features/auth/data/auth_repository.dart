@@ -61,7 +61,7 @@ class AuthRepository {
         'role': role,
         'student_id_number': studentId,
         'level': level,
-        'status': 'pending_sync',
+        'status': 'pending',
         'updated_at': now,
         'is_dirty': 1,
         'is_deleted': 0,
@@ -103,7 +103,7 @@ class AuthRepository {
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': 'approved',
+          'status': 'pending',
           'updated_at': now,
         };
         await _client.from('profiles').upsert(profileData);
@@ -149,7 +149,7 @@ class AuthRepository {
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': 'pending_sync',
+          'status': 'pending',
           'updated_at': now,
           'is_dirty': 1,
           'is_deleted': 0,
