@@ -26,7 +26,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
     return profileAsync.when(
       data: (profile) {
-        if (profile?['supervisor_id'] == null || profile?['industry_supervisor_id'] == null) {
+        if (profile?['industry_supervisor_id'] == null) {
           return const SupervisorSelectionScreen();
         }
 
@@ -502,7 +502,7 @@ class _SupervisorSelectionScreenState
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _staffList = [];
   bool _isSearching = false;
-  String _activeRole = 'academic_supervisor'; // 'academic_supervisor' or 'industry_supervisor'
+  final String _activeRole = 'industry_supervisor'; // Only Industry Supervisor is selected by the Student
 
   Map<String, dynamic>? _selectedAcademic;
   Map<String, dynamic>? _selectedIndustry;
@@ -585,16 +585,12 @@ class _SupervisorSelectionScreenState
 
   void _selectSupervisor(Map<String, dynamic> staff) {
     setState(() {
-      if (_activeRole == 'academic_supervisor') {
-        _selectedAcademic = staff;
-      } else {
-        _selectedIndustry = staff;
-      }
+      _selectedIndustry = staff;
     });
   }
 
   Future<void> _completeOnboarding() async {
-    if (_selectedAcademic == null || _selectedIndustry == null) return;
+    if (_selectedIndustry == null) return;
 
     final user = ref.read(currentUserProvider);
     if (user == null) return;
@@ -604,17 +600,21 @@ class _SupervisorSelectionScreenState
       final db = await LocalDatabase.instance.database;
       final now = DateTime.now().toIso8601String();
 
-      final supervisorId = _selectedAcademic!['id']?.toString() ?? '';
+      // Keep Academic Supervisor as whatever is currently set locally (by Admin)
+      final profileResults = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
+      final String? existingAcademicId = profileResults.isNotEmpty ? profileResults.first['supervisor_id'] as String? : null;
+
       final industrySupervisorId = _selectedIndustry!['id']?.toString() ?? '';
 
       // 1. Instantly save to SharedPreferences cache
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('user_supervisor_id_${user.id}', supervisorId);
+      if (existingAcademicId != null) {
+        await prefs.setString('user_supervisor_id_${user.id}', existingAcademicId);
+      }
       await prefs.setString('user_industry_supervisor_id_${user.id}', industrySupervisorId);
 
       // 2. Instantly update locally in SQLite
       await db.update('profiles', {
-        'supervisor_id': supervisorId,
         'industry_supervisor_id': industrySupervisorId,
         'updated_at': now,
         'is_dirty': 1,
@@ -624,7 +624,6 @@ class _SupervisorSelectionScreenState
       sb.Supabase.instance.client
           .from('profiles')
           .update({
-            'supervisor_id': supervisorId,
             'industry_supervisor_id': industrySupervisorId,
             'updated_at': now,
           })
@@ -684,7 +683,7 @@ class _SupervisorSelectionScreenState
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Assign Your Supervisors',
+                  'Assign Your Industry Supervisor',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
@@ -692,142 +691,84 @@ class _SupervisorSelectionScreenState
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Select BOTH your Academic and Industry supervisors to complete your registration.',
+                  'Select your Industry supervisor below. Your Academic supervisor is assigned by the institution administrator.',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 16),
-                // Selection Tabs
-                Row(
-                  children: [
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          if (_activeRole != 'academic_supervisor') {
-                            setState(() {
-                              _activeRole = 'academic_supervisor';
-                              _searchController.clear();
-                            });
-                            _searchStaff('');
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: _activeRole == 'academic_supervisor'
-                                ? theme.colorScheme.primaryContainer
-                                : Colors.grey.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _activeRole == 'academic_supervisor'
-                                  ? theme.colorScheme.primary
-                                  : Colors.grey.withOpacity(0.2),
-                              width: 1.5,
-                            ),
-                          ),
+                const SizedBox(height: 20),
+                Card(
+                  color: Colors.green.withValues(alpha: 0.05),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.school, color: Colors.green),
+                        const SizedBox(width: 12),
+                        Expanded(
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                Icons.school_outlined,
-                                color: _activeRole == 'academic_supervisor'
-                                    ? theme.colorScheme.primary
-                                    : Colors.grey,
-                              ),
-                              const SizedBox(height: 4),
                               const Text(
-                                'Academic',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                'Academic Supervisor Status',
+                                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 2),
                               Text(
-                                _selectedAcademic?['full_name'] ?? 'Not Selected',
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: _selectedAcademic != null ? Colors.green : Colors.red,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                                _selectedAcademic != null
+                                    ? 'Assigned: ${_selectedAcademic!['full_name']}'
+                                    : 'Allocation handled directly by Admin',
+                                style: TextStyle(color: Colors.grey[700], fontSize: 13),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: InkWell(
-                        onTap: () {
-                          if (_activeRole != 'industry_supervisor') {
-                            setState(() {
-                              _activeRole = 'industry_supervisor';
-                              _searchController.clear();
-                            });
-                            _searchStaff('');
-                          }
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                          decoration: BoxDecoration(
-                            color: _activeRole == 'industry_supervisor'
-                                ? theme.colorScheme.primaryContainer
-                                : Colors.grey.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _activeRole == 'industry_supervisor'
-                                  ? theme.colorScheme.primary
-                                  : Colors.grey.withOpacity(0.2),
-                              width: 1.5,
-                        ),
-                      ),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.business_outlined,
-                                color: _activeRole == 'industry_supervisor'
-                                    ? theme.colorScheme.primary
-                                    : Colors.grey,
-                              ),
-                              const SizedBox(height: 4),
-                              const Text(
-                                'Industry',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _selectedIndustry?['full_name'] ?? 'Not Selected',
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: _selectedIndustry != null ? Colors.green : Colors.red,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: _activeRole == 'academic_supervisor'
-                        ? 'Search academic supervisor...'
-                        : 'Search industry supervisor...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.arrow_forward_rounded),
-                      onPressed: () => _searchStaff(_searchController.text),
+                      ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Select Your Industry Supervisor:',
+                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Colors.indigo, width: 1.5),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.business_center, color: Colors.indigo),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _selectedIndustry?['full_name'] ?? 'Please search and select below...',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _selectedIndustry != null ? Colors.black87 : Colors.grey,
+                            ),
+                          ),
+                        ),
+                        if (_selectedIndustry != null)
+                          const Icon(Icons.check_circle, color: Colors.green),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search industry supervisor by name...',
+                    prefixIcon: Icon(Icons.search),
+                  ),
+                  onChanged: _searchStaff,
                   onSubmitted: _searchStaff,
                 ),
                 const SizedBox(height: 12),
@@ -841,7 +782,7 @@ class _SupervisorSelectionScreenState
                             padding: const EdgeInsets.symmetric(vertical: 24.0),
                             child: Center(
                               child: Text(
-                                'No supervisors found. Try searching.',
+                                'No industry supervisors found. Try searching.',
                                 style: TextStyle(color: Colors.grey[500]),
                               ),
                             ),
@@ -853,11 +794,7 @@ class _SupervisorSelectionScreenState
                             separatorBuilder: (_, _) => const SizedBox(height: 8),
                             itemBuilder: (context, index) {
                               final staff = _staffList[index];
-                              final isCurrentlySelected =
-                                  (_activeRole == 'academic_supervisor' &&
-                                          _selectedAcademic?['id'] == staff['id']) ||
-                                      (_activeRole == 'industry_supervisor' &&
-                                          _selectedIndustry?['id'] == staff['id']);
+                              final isCurrentlySelected = _selectedIndustry?['id'] == staff['id'];
 
                               return Card(
                                 margin: EdgeInsets.zero,
@@ -883,7 +820,7 @@ class _SupervisorSelectionScreenState
                                     staff['full_name'] ?? 'Anonymous Staff',
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
-                                  subtitle: Text(staff['department'] ?? 'General Dept'),
+                                  subtitle: Text(staff['company_name'] ?? staff['department'] ?? 'General Dept'),
                                   trailing: isCurrentlySelected
                                       ? const Icon(Icons.check_circle, color: Colors.green)
                                       : const Icon(Icons.add_circle_outline,
@@ -893,9 +830,9 @@ class _SupervisorSelectionScreenState
                               );
                             },
                           ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: (_selectedAcademic == null || _selectedIndustry == null || _isSaving)
+                  onPressed: (_selectedIndustry == null || _isSaving)
                       ? null
                       : _completeOnboarding,
                   style: ElevatedButton.styleFrom(

@@ -49,15 +49,6 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
-              ),
-            ),
-            tooltip: 'Browse & Assign Students',
-          ),
-          IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () => ref.read(syncServiceProvider).syncData(),
           ),
@@ -102,15 +93,13 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                               'No students assigned yet.',
                               style: TextStyle(color: Colors.grey[500]),
                             ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
-                                ),
-                              ),
-                              icon: const Icon(Icons.person_add_alt_1_outlined),
-                              label: const Text('Browse & Assign Students'),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.isAcademic
+                                  ? 'Your assigned students are allocated by the administrator.'
+                                  : 'Students must select you as their Industry supervisor to be added to your list.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
                             ),
                           ],
                         ),
