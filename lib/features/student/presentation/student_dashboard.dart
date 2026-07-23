@@ -616,22 +616,35 @@ class _SupervisorSelectionScreenState
         'is_dirty': 1,
       }, where: 'id = ?', whereArgs: [user.id]);
 
-      // Update remote
-      await sb.Supabase.instance.client
-          .from('profiles')
-          .update({
-            'supervisor_id': _selectedAcademic!['id'],
-            'industry_supervisor_id': _selectedIndustry!['id'],
-            'updated_at': now,
-          })
-          .eq('id', user.id);
+      bool isOnline = true;
+      // Update remote with timeout and fallback
+      try {
+        await sb.Supabase.instance.client
+            .from('profiles')
+            .update({
+              'supervisor_id': _selectedAcademic!['id'],
+              'industry_supervisor_id': _selectedIndustry!['id'],
+              'updated_at': now,
+            })
+            .eq('id', user.id)
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        isOnline = false;
+        debugPrint('Remote onboarding update deferred (offline): $e');
+      }
 
       ref.read(syncServiceProvider).syncData();
       ref.invalidate(userProfileProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Onboarding complete! Loading dashboard...')),
+          SnackBar(
+            content: Text(isOnline
+              ? 'Onboarding complete! Loading dashboard...'
+              : 'Onboarding saved locally! Loading dashboard (offline mode)...'),
+            backgroundColor: isOnline ? Colors.green : Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     } catch (e) {
