@@ -58,7 +58,7 @@ class AuthRepository {
 
       if (response.user != null) {
         debugPrint('Signup successful for ${response.user!.id}, creating profile...');
-        // Create a profile record in the public.profiles table
+        // Create a profile record in the public.profiles table - students start as pending requiring admin approval
         final profileData = {
           'id': response.user!.id,
           'email': email,
@@ -66,7 +66,7 @@ class AuthRepository {
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': 'approved',
+          'status': role == 'student' ? 'pending' : 'approved',
           'updated_at': now,
         };
         await _client.from('profiles').upsert(profileData);
@@ -111,7 +111,7 @@ class AuthRepository {
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': 'pending_sync',
+          'status': role == 'student' ? 'pending' : 'approved',
           'updated_at': now,
           'is_dirty': 1,
           'is_deleted': 0,

@@ -25,6 +25,11 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
     return profileAsync.when(
       data: (profile) {
+        final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
+        if (status != 'approved') {
+          return const AwaitingApprovalScreen();
+        }
+
         if (profile?['supervisor_id'] == null || profile?['industry_supervisor_id'] == null) {
           return const SupervisorSelectionScreen();
         }
@@ -907,5 +912,208 @@ class _SupervisorSelectionScreenState
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+}
+
+class AwaitingApprovalScreen extends ConsumerStatefulWidget {
+  const AwaitingApprovalScreen({super.key});
+
+  @override
+  ConsumerState<AwaitingApprovalScreen> createState() => _AwaitingApprovalScreenState();
+}
+
+class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen> {
+  bool _isRefreshing = false;
+
+  Future<void> _refresh() async {
+    setState(() => _isRefreshing = true);
+    try {
+      // Execute background sync to fetch latest approval status
+      await ref.read(syncServiceProvider).syncData();
+      // Force refresh of user profile provider
+      ref.invalidate(userProfileProvider);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Status refreshed successfully.'),
+            backgroundColor: Colors.indigo,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Refresh failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+
+    final String name = profile?['full_name'] ?? 'Student';
+    final String email = profile?['email'] ?? 'Not set';
+    final String studentId = profile?['student_id_number'] ?? 'Not set';
+
+    return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Account Status'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+            tooltip: 'Sign Out',
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Icon(
+                  Icons.lock_clock_outlined,
+                  size: 80,
+                  color: Colors.amber,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Awaiting Admin Approval',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Your account has been registered successfully, but must be reviewed and approved by an administrator before you can access the logbook and submit daily entries.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 32),
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your Registered Info',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const Divider(height: 24),
+                        _infoRow(context, 'Full Name', name),
+                        _infoRow(context, 'Email Address', email),
+                        _infoRow(context, 'Student ID', studentId),
+                        _infoRow(context, 'Status', 'Pending Approval', isBadge: true),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                if (_isRefreshing)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else ...[
+                  ElevatedButton.icon(
+                    onPressed: _refresh,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Sync & Refresh Status'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Sign Out of Account'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(BuildContext context, String label, String value, {bool isBadge = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          isBadge
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                  ),
+                  child: const Text(
+                    'PENDING',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+        ],
+      ),
+    );
   }
 }
