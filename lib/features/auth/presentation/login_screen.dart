@@ -213,6 +213,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final newPasswordController = TextEditingController();
     bool isSending = false;
     bool showOtpFields = false;
+    bool obscureNewPassword = true;
     String? errorMessage;
     String? retrievedOtp;
 
@@ -279,11 +280,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: newPasswordController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'New Password',
-                        prefixIcon: Icon(Icons.lock_outline),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureNewPassword ? Icons.visibility_off : Icons.visibility,
+                          ),
+                          onPressed: () {
+                            setDialogState(() {
+                              obscureNewPassword = !obscureNewPassword;
+                            });
+                          },
+                        ),
                       ),
-                      obscureText: true,
+                      obscureText: obscureNewPassword,
                     ),
                   ],
                   if (errorMessage != null)

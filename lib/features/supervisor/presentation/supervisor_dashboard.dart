@@ -300,14 +300,27 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Future<void> _unassignStudent(String studentId) async {
     final db = await LocalDatabase.instance.database;
     final now = DateTime.now().toIso8601String();
-
+    // 1. Update local database instantly (offline-first)
     // Update local first (Offline-First)
     await db.update('profiles', {
       widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
       'updated_at': now,
       'is_dirty': 1,
     }, where: 'id = ?', whereArgs: [studentId]);
+    // 2. Try remote database update, catch connectivity errors gracefully
+    try {
+      await sb.Supabase.instance.client
+          .from('profiles')
+          .update({
+            widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
+            'updated_at': now,
+          })
+          .eq('id', studentId);
+    } catch (e) {
+      debugPrint('Remote unassignment deferred (offline): $e');
+    }
 
+    // 3. Trigger background sync
     // Trigger non-blocking remote write to background
     sb.Supabase.instance.client
         .from('profiles')
@@ -403,6 +416,24 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
         'is_dirty': 1,
       };
 
+      // 1. Update local DB instantly
+      await db.update('profiles', updateData, where: 'id = ?', whereArgs: [student['id']]);
+
+      bool isOnline = true;
+      // 2. Try remote DB update with a fast timeout and handle offline states gracefully
+      try {
+        await sb.Supabase.instance.client
+            .from('profiles')
+            .update({
+              updateField: assign ? currentUser.id : null,
+              'updated_at': now,
+            })
+            .eq('id', student['id'])
+            .timeout(const Duration(seconds: 4));
+      } catch (e) {
+        isOnline = false;
+        debugPrint('Remote assignment update deferred (offline mode active): $e');
+      }
       // 1. Update local DB (Instant)
       await db.update('profiles', updateData, where: 'id = ?', whereArgs: [student['id']]);
 
@@ -417,6 +448,7 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
           .then((_) => debugPrint('Background student assignment toggle succeeded.'))
           .catchError((e) => debugPrint('Background student assignment toggle failed: $e'));
 
+
       // 3. Trigger sync and invalidate profile to update state
       ref.read(syncServiceProvider).syncData();
       ref.invalidate(supervisorStudentsProvider(widget.isAcademic));
@@ -425,17 +457,23 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              assign
-                  ? 'Assigned ${student['full_name']} to your roster'
-                  : 'Removed ${student['full_name']} from your roster',
+              isOnline
+                  ? (assign
+                      ? '✅ Assigned ${student['full_name']} to your roster'
+                      : '✅ Removed ${student['full_name']} from your roster')
+                  : (assign
+                      ? 'Saved locally: ${student['full_name']} assigned. Syncing soon.'
+                      : 'Saved locally: ${student['full_name']} removed. Syncing soon.'),
             ),
+            backgroundColor: isOnline ? Colors.green : Colors.orange,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Assignment failed: $e')),
+          SnackBar(content: Text('Error: $e')),
         );
       }
     } finally {

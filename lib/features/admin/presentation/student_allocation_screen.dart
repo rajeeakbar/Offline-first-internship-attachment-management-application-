@@ -159,6 +159,60 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
     }
   }
 
+  Future<void> _approveStudent(String studentId) async {
+    final db = await LocalDatabase.instance.database;
+    final now = DateTime.now().toIso8601String();
+
+    // 1. Update local DB with status approved and marked dirty
+    await db.update(
+      'profiles',
+      {
+        'status': 'approved',
+        'is_dirty': 1,
+        'updated_at': now,
+      },
+      where: 'id = ?',
+      whereArgs: [studentId],
+    );
+
+    // 2. Update local state instantly
+    setState(() {
+      final index = _students.indexWhere((s) => s['id'] == studentId);
+      if (index != -1) {
+        final Map<String, dynamic> updated = Map<String, dynamic>.from(_students[index]);
+        updated['status'] = 'approved';
+        updated['is_dirty'] = 1;
+        _students[index] = updated;
+      }
+      _pendingUpdates.add(studentId);
+    });
+
+    // 3. Trigger remote update & sync
+    try {
+      await Supabase.instance.client
+          .from('profiles')
+          .update({
+            'status': 'approved',
+            'updated_at': now,
+          })
+          .eq('id', studentId);
+    } catch (e) {
+      debugPrint('Remote approval error: $e');
+    }
+
+    ref.read(syncServiceProvider).syncData();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Student approved successfully! Access granted.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,6 +247,8 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                         final student = _students[index];
                         final currentSupervisorId = student['supervisor_id'];
                         final isPending = _pendingUpdates.contains(student['id']);
+                        final String status = student['status']?.toString().toLowerCase() ?? 'pending';
+                        final bool needsApproval = status != 'approved';
 
                         return Card(
                           child: Padding(
@@ -217,26 +273,78 @@ class _StudentAllocationScreenState extends ConsumerState<StudentAllocationScree
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('ID: ${student['student_id_number'] ?? "N/A"}'),
+                                  if (needsApproval) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: const [
+                                          Icon(Icons.warning_amber_rounded, color: Colors.red, size: 13),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'Needs Admin Approval to Access Logbook',
+                                            style: TextStyle(
+                                              color: Colors.red,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(height: 8),
                                   const Text(
                                     'Assign Academic Supervisor:',
-                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.indigo),
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.indigo),
                                   ),
                                 ],
                               ),
                               isThreeLine: true,
-                              trailing: DropdownButton<String>(
-                                underline: const SizedBox(),
-                                hint: const Text('Select Staff'),
-                                value: currentSupervisorId,
-                                items: [
-                                  const DropdownMenuItem(value: null, child: Text('None')),
-                                  ..._academicSupervisors.map((s) => DropdownMenuItem(
-                                        value: s['id'] as String,
-                                        child: Text(s['full_name'] ?? 'Staff'),
-                                      )),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (needsApproval) ...[
+                                    ElevatedButton(
+                                      onPressed: () => _approveStudent(student['id']),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green,
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Approve',
+                                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  DropdownButton<String>(
+                                    underline: const SizedBox(),
+                                    hint: const Text('Select Staff'),
+                                    value: currentSupervisorId,
+                                    items: [
+                                      const DropdownMenuItem(value: null, child: Text('None')),
+                                      ..._academicSupervisors.map((s) => DropdownMenuItem(
+                                            value: s['id'] as String,
+                                            child: Text(s['full_name'] ?? 'Staff'),
+                                          )),
+                                    ],
+                                    onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
+                                  ),
                                 ],
-                                onChanged: (val) => _assignAcademicSupervisor(student['id'], val),
                               ),
                             ),
                           ),
