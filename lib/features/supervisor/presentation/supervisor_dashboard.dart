@@ -21,6 +21,8 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final studentsAsync = ref.watch(supervisorStudentsProvider(widget.isAcademic));
+    final profile = ref.watch(userProfileProvider).value;
+    final isApproved = profile?['status'] == 'approved';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -49,15 +51,6 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
-              ),
-            ),
-            tooltip: 'Browse & Assign Students',
-          ),
-          IconButton(
             icon: const Icon(Icons.sync),
             onPressed: () => ref.read(syncServiceProvider).syncData(),
           ),
@@ -72,6 +65,44 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
           data: (students) => CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              if (!isApproved)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Card(
+                      color: Colors.orange.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.hourglass_empty_rounded, color: Colors.orange, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Supervisor Pending Approval',
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 15),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your profile is awaiting administrator approval. Log evaluations and student reviews are currently disabled.',
+                                    style: TextStyle(color: Colors.grey[800], fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               SliverPadding(
                 padding: const EdgeInsets.all(20),
                 sliver: SliverToBoxAdapter(
@@ -102,15 +133,13 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                               'No students assigned yet.',
                               style: TextStyle(color: Colors.grey[500]),
                             ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => BrowseStudentsScreen(isAcademic: widget.isAcademic),
-                                ),
-                              ),
-                              icon: const Icon(Icons.person_add_alt_1_outlined),
-                              label: const Text('Browse & Assign Students'),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.isAcademic
+                                  ? 'Your assigned students are allocated by the administrator.'
+                                  : 'Students must select you as their Industry supervisor to be added to your list.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
                             ),
                           ],
                         ),
@@ -271,14 +300,13 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Future<void> _unassignStudent(String studentId) async {
     final db = await LocalDatabase.instance.database;
     final now = DateTime.now().toIso8601String();
-
     // 1. Update local database instantly (offline-first)
+    // Update local first (Offline-First)
     await db.update('profiles', {
       widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
       'updated_at': now,
       'is_dirty': 1,
     }, where: 'id = ?', whereArgs: [studentId]);
-
     // 2. Try remote database update, catch connectivity errors gracefully
     try {
       await sb.Supabase.instance.client
@@ -293,7 +321,20 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
     }
 
     // 3. Trigger background sync
+    // Trigger non-blocking remote write to background
+    sb.Supabase.instance.client
+        .from('profiles')
+        .update({
+          widget.isAcademic ? 'supervisor_id' : 'industry_supervisor_id': null,
+          'updated_at': now,
+        })
+        .eq('id', studentId)
+        .then((_) => debugPrint('Background remote unassignment completed.'))
+        .catchError((e) => debugPrint('Background remote unassignment failed (will sync later): $e'));
+
+    // Soft sync and invalidate
     ref.read(syncServiceProvider).syncData();
+    ref.invalidate(supervisorStudentsProvider(widget.isAcademic));
   }
 
   void _viewStudentLogs(Map<String, dynamic> student) {
@@ -393,6 +434,20 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
         isOnline = false;
         debugPrint('Remote assignment update deferred (offline mode active): $e');
       }
+      // 1. Update local DB (Instant)
+      await db.update('profiles', updateData, where: 'id = ?', whereArgs: [student['id']]);
+
+      // 2. Update remote DB in background / non-blocking
+      sb.Supabase.instance.client
+          .from('profiles')
+          .update({
+            updateField: assign ? currentUser.id : null,
+            'updated_at': now,
+          })
+          .eq('id', student['id'])
+          .then((_) => debugPrint('Background student assignment toggle succeeded.'))
+          .catchError((e) => debugPrint('Background student assignment toggle failed: $e'));
+
 
       // 3. Trigger sync and invalidate profile to update state
       ref.read(syncServiceProvider).syncData();

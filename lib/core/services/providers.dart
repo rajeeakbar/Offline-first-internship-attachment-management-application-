@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
 import '../../features/auth/data/auth_repository.dart';
@@ -76,6 +77,12 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
           final profile = results.first;
           await prefs.setString('user_role_${profile['id']}', profile['role']?.toString() ?? 'student');
           await prefs.setString('user_name_${profile['id']}', profile['full_name']?.toString() ?? 'User');
+          if (profile['student_id_number'] != null) {
+            await prefs.setString('user_student_id_number_${profile['id']}', profile['student_id_number'].toString());
+          }
+          if (profile['level'] != null) {
+            await prefs.setString('user_level_${profile['id']}', profile['level'].toString());
+          }
           return profile;
         }
       } catch (e) {
@@ -89,6 +96,10 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   final cachedRole = prefs.getString('user_role_${user.id}');
   final cachedName = prefs.getString('user_name_${user.id}');
+  final cachedStudentId = prefs.getString('user_student_id_number_${user.id}');
+  final cachedLevel = prefs.getString('user_level_${user.id}');
+  final cachedSupervisorId = prefs.getString('user_supervisor_id_${user.id}');
+  final cachedIndustrySupervisorId = prefs.getString('user_industry_supervisor_id_${user.id}');
 
   if (cachedRole != null) {
     debugPrint('✅ Loaded role from cache: $cachedRole');
@@ -96,6 +107,10 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       'id': user.id,
       'role': cachedRole,
       'full_name': cachedName ?? 'User',
+      'student_id_number': cachedStudentId,
+      'level': cachedLevel,
+      'supervisor_id': cachedSupervisorId,
+      'industry_supervisor_id': cachedIndustrySupervisorId,
     };
   }
 
@@ -107,6 +122,22 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       final profile = results.first;
       await prefs.setString('user_role_${user.id}', profile['role']?.toString() ?? 'student');
       await prefs.setString('user_name_${user.id}', profile['full_name']?.toString() ?? 'User');
+      if (profile['student_id_number'] != null) {
+        await prefs.setString('user_student_id_number_${user.id}', profile['student_id_number'].toString());
+      }
+      if (profile['level'] != null) {
+        await prefs.setString('user_level_${user.id}', profile['level'].toString());
+      }
+      if (profile['supervisor_id'] != null) {
+        await prefs.setString('user_supervisor_id_${user.id}', profile['supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_supervisor_id_${user.id}');
+      }
+      if (profile['industry_supervisor_id'] != null) {
+        await prefs.setString('user_industry_supervisor_id_${user.id}', profile['industry_supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_industry_supervisor_id_${user.id}');
+      }
       return profile;
     }
   } catch (e) {
@@ -115,6 +146,14 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 
   // 3️⃣ THIRD: If cache/local DB is empty, fetch from Supabase (with timeout)
   try {
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Skipping cloud profile fetch: Device is offline.');
+      throw Exception('Device is offline');
+    }
+
     debugPrint('🔍 No cache or local SQLite row, fetching from Supabase...');
     final response = await Supabase.instance.client
         .from('profiles')
@@ -127,6 +166,22 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       // Save to cache for next time
       await prefs.setString('user_role_${user.id}', response['role'] ?? 'student');
       await prefs.setString('user_name_${user.id}', response['full_name'] ?? '');
+      if (response['student_id_number'] != null) {
+        await prefs.setString('user_student_id_number_${user.id}', response['student_id_number'].toString());
+      }
+      if (response['level'] != null) {
+        await prefs.setString('user_level_${user.id}', response['level'].toString());
+      }
+      if (response['supervisor_id'] != null) {
+        await prefs.setString('user_supervisor_id_${user.id}', response['supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_supervisor_id_${user.id}');
+      }
+      if (response['industry_supervisor_id'] != null) {
+        await prefs.setString('user_industry_supervisor_id_${user.id}', response['industry_supervisor_id'].toString());
+      } else {
+        await prefs.remove('user_industry_supervisor_id_${user.id}');
+      }
 
       // Also insert into local SQLite DB to keep it in sync
       try {
@@ -150,14 +205,34 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final metadata = user.userMetadata ?? {};
   final String fallbackRole = metadata['role'] ?? 'student';
   final String fallbackName = metadata['full_name'] ?? metadata['name'] ?? 'User';
+  final String? fallbackStudentId = metadata['student_id_number'];
+  final String? fallbackLevel = metadata['level'];
+  final String? fallbackSupervisorId = metadata['supervisor_id'];
+  final String? fallbackIndustrySupervisorId = metadata['industry_supervisor_id'];
 
   await prefs.setString('user_role_${user.id}', fallbackRole);
   await prefs.setString('user_name_${user.id}', fallbackName);
+  if (fallbackStudentId != null) {
+    await prefs.setString('user_student_id_number_${user.id}', fallbackStudentId);
+  }
+  if (fallbackLevel != null) {
+    await prefs.setString('user_level_${user.id}', fallbackLevel);
+  }
+  if (fallbackSupervisorId != null) {
+    await prefs.setString('user_supervisor_id_${user.id}', fallbackSupervisorId);
+  }
+  if (fallbackIndustrySupervisorId != null) {
+    await prefs.setString('user_industry_supervisor_id_${user.id}', fallbackIndustrySupervisorId);
+  }
 
   return {
     'id': user.id,
     'role': fallbackRole,
     'full_name': fallbackName,
+    'student_id_number': fallbackStudentId,
+    'level': fallbackLevel,
+    'supervisor_id': fallbackSupervisorId,
+    'industry_supervisor_id': fallbackIndustrySupervisorId,
   };
 });
 
@@ -245,6 +320,14 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
     return;
   }
 
+  // Guard: If supervisor is not approved, return empty list (Empty Dashboard)
+  final profile = ref.watch(userProfileProvider).value;
+  final isApproved = profile?['status'] == 'approved';
+  if (!isApproved) {
+    yield [];
+    return;
+  }
+
   final db = await ref.read(databaseProvider.future);
   List<Map<String, dynamic>>? lastValue;
 
@@ -252,8 +335,8 @@ final supervisorStudentsProvider = StreamProvider.family<List<Map<String, dynami
     try {
       final results = await db.query(
         'profiles',
-        where: isAcademic ? 'supervisor_id = ?' : 'industry_supervisor_id = ?',
-        whereArgs: [user.id],
+        where: '${isAcademic ? 'supervisor_id' : 'industry_supervisor_id'} = ? AND is_deleted = ?',
+        whereArgs: [user.id, 0],
       );
       if (!_areMapListsEqual(results, lastValue)) {
         lastValue = results;

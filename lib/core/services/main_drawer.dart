@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/auth/data/auth_repository.dart';
+import '../../features/auth/presentation/edit_profile_screen.dart';
 import 'providers.dart';
 
 class MainDrawer extends ConsumerWidget {
@@ -43,6 +44,16 @@ class MainDrawer extends ConsumerWidget {
               ref.read(syncServiceProvider).syncData();
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Synchronization started...')),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_outline_rounded),
+            title: const Text('My Profile'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
               );
             },
           ),
