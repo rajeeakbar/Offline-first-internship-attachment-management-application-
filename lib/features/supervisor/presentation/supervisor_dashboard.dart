@@ -153,11 +153,12 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent, size: 20),
-                                      onPressed: () => _confirmUnassignStudent(student),
-                                      tooltip: 'Unassign Student',
-                                    ),
+                                    if (!widget.isAcademic)
+                                      IconButton(
+                                        icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent, size: 20),
+                                        onPressed: () => _confirmUnassignStudent(student),
+                                        tooltip: 'Unassign Student',
+                                      ),
                                     const Icon(Icons.chevron_right),
                                   ],
                                 ),
@@ -499,16 +500,18 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
                                   ],
                                 ),
                                 trailing: isAssignedToMe
-                                    ? ElevatedButton.icon(
-                                        onPressed: () => _toggleAssignment(student, false),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red.withValues(alpha: 0.1),
-                                          foregroundColor: Colors.red,
-                                          elevation: 0,
-                                        ),
-                                        icon: const Icon(Icons.remove_circle_outline, size: 16),
-                                        label: const Text('Remove'),
-                                      )
+                                    ? (widget.isAcademic
+                                        ? const SizedBox.shrink()
+                                        : ElevatedButton.icon(
+                                            onPressed: () => _toggleAssignment(student, false),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red.withValues(alpha: 0.1),
+                                              foregroundColor: Colors.red,
+                                              elevation: 0,
+                                            ),
+                                            icon: const Icon(Icons.remove_circle_outline, size: 16),
+                                            label: const Text('Remove'),
+                                          ))
                                     : ElevatedButton.icon(
                                         onPressed: () => _toggleAssignment(student, true),
                                         style: ElevatedButton.styleFrom(
