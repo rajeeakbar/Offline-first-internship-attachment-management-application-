@@ -38,6 +38,7 @@ Our `SyncService` implements a robust hybrid strategy:
 - **Offline-First**: All data is saved locally first, ensuring functionality in remote areas.
 - **Field-Level Merging**: Uses `updated_at` timestamps to perform a "Cloud-wins" merge, but preserves local-only metadata like `local_path` for media.
 - **Automatic Sync**: Triggers automatically upon network detection using `connectivity_plus`.
+- **Premium Email Sync Architecture**: Since the remote database `profiles` schema does not possess an `email` column, the sync pipeline automatically encodes user emails inside the remote `full_name` column (using `'Name | email'`) when pushing to Supabase. When pulling or logging in, it seamlessly decodes this combined field back into separate local SQLite database `full_name` and `email` columns. This prevents PGRST204 column-not-found schema errors, supports real-time email displaying in Account Management and Supervisor rosters, and functions 100% offline-first.
 - **Reliability**: Includes a 3-tier retry mechanism with exponential backoff.
 
 #### **💡 Important Note on Offline Usage**
