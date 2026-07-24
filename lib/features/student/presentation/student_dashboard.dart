@@ -548,8 +548,8 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
       // Invalidate profile to trigger refresh
       ref.invalidate(userProfileProvider);
 
-      // Check if user is now approved
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      // Check if user is now approved by awaiting the newly triggered future
+      final profile = await ref.read(userProfileProvider.future);
       final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
 
       if (status == 'approved' && mounted) {
@@ -575,8 +575,8 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
       // CRITICAL FIX: Force refresh of user profile provider
       ref.invalidate(userProfileProvider);
 
-      // Check if user is now approved
-      final profile = ref.read(userProfileProvider).valueOrNull;
+      // Check if user is now approved by awaiting the newly triggered future
+      final profile = await ref.read(userProfileProvider.future);
       final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
 
       if (mounted) {
