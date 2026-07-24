@@ -23,6 +23,32 @@ class StudentDashboard extends ConsumerStatefulWidget {
 }
 
 class _StudentDashboardState extends ConsumerState<StudentDashboard> {
+  Future<String?> _getReminderMessage(String studentId) async {
+    try {
+      final db = await LocalDatabase.instance.database;
+      final results = await db.query(
+        'app_settings',
+        where: 'key = ?',
+        whereArgs: ['reminder_$studentId'],
+      );
+      if (results.isNotEmpty) {
+        final message = results.first['value']?.toString();
+        if (message != null && message.trim().isNotEmpty) {
+          // Check SharedPreferences to see if this specific message was dismissed
+          final prefs = await SharedPreferences.getInstance();
+          final dismissedMsg = prefs.getString('dismissed_reminder_msg_$studentId');
+          if (dismissedMsg == message) {
+            return null;
+          }
+          return message;
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load reminder message: $e');
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -49,6 +75,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
         }
 
         final fullName = profile['full_name'] ?? 'Student';
+        final userId = profile['id']?.toString() ?? '';
 
         return Scaffold(
           backgroundColor: theme.colorScheme.surface,
@@ -116,95 +143,85 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (profile['reminder_message'] != null && profile['reminder_message'].toString().trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 20.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.orange.shade600, Colors.red.shade600],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.red.withValues(alpha: 0.2),
-                              blurRadius: 8,
-                              offset: const Offset(0, 4),
+                  FutureBuilder<String?>(
+                    future: _getReminderMessage(userId),
+                    builder: (context, snapshot) {
+                      final message = snapshot.data;
+                      if (message == null || message.trim().isEmpty) return const SizedBox.shrink();
+
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 20.0),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.orange.shade600, Colors.red.shade600],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 28),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'ADMINISTRATOR WARNING',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 11,
-                                        letterSpacing: 1.1,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      profile['reminder_message'].toString(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
-                                tooltip: 'Acknowledge Reminder',
-                                onPressed: () async {
-                                  final db = await LocalDatabase.instance.database;
-                                  final now = DateTime.now().toIso8601String();
-                                  final userId = profile['id'];
-
-                                  // Clear locally
-                                  await db.update(
-                                    'profiles',
-                                    {
-                                      'reminder_message': null,
-                                      'is_dirty': 1,
-                                      'updated_at': now,
-                                    },
-                                    where: 'id = ?',
-                                    whereArgs: [userId],
-                                  );
-
-                                  // Clear in SharedPreferences
-                                  final prefs = await SharedPreferences.getInstance();
-                                  await prefs.remove('user_reminder_message_$userId');
-
-                                  // Invalidate to refresh UI
-                                  ref.invalidate(userProfileProvider);
-
-                                  // Trigger background sync
-                                  ref.read(syncServiceProvider).syncData();
-                                },
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 28),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'ADMINISTRATOR WARNING',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                          letterSpacing: 1.1,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        message,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          height: 1.3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+                                  tooltip: 'Acknowledge Reminder',
+                                  onPressed: () async {
+                                    // Save the dismissed message text in SharedPreferences locally so they don't see it again
+                                    final prefs = await SharedPreferences.getInstance();
+                                    await prefs.setString('dismissed_reminder_msg_$userId', message);
+
+                                    // Refresh the UI
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
+                      );
+                    },
+                  ),
                   Row(
                     children: [
                       Expanded(
