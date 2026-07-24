@@ -97,26 +97,85 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
     });
   }
 
-  void _sendManualReminder(String studentName) {
+  void _sendManualReminder(String studentId, String studentName) {
+    final messageController = TextEditingController(
+      text: 'Hi $studentName, please remember to submit your daily logbook entries for this week to maintain compliance. Thank you!',
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Send Reminder'),
-        content: Text('Are you sure you want to send an automated compliance reminder to $studentName?'),
+        title: Text('Remind $studentName', style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Customize your reminder message below:',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 4,
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
+          ElevatedButton.icon(
+            icon: const Icon(Icons.send_rounded),
+            onPressed: () async {
+              final message = messageController.text.trim();
+              if (message.isEmpty) return;
+
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('⚡ Reminder sent to $studentName successfully!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              setState(() => _isLoading = true);
+
+              try {
+                final db = await LocalDatabase.instance.database;
+                final now = DateTime.now().toIso8601String();
+
+                // Offline-First Update
+                await db.update(
+                  'profiles',
+                  {
+                    'reminder_message': message,
+                    'is_dirty': 1,
+                    'updated_at': now,
+                  },
+                  where: 'id = ?',
+                  whereArgs: [studentId],
+                );
+
+                // Try to trigger background sync to Supabase
+                ref.read(syncServiceProvider).syncData();
+
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('⚡ Custom reminder sent to $studentName!'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              } finally {
+                _calculateMetrics();
+              }
             },
-            child: const Text('Send'),
+            label: const Text('Send Reminder'),
           ),
         ],
       ),
@@ -124,25 +183,95 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
   }
 
   void _sendBulkReminders(int count) {
+    final messageController = TextEditingController(
+      text: 'Hi, please remember to submit your daily logbook entries for this week to maintain compliance. Your coordinator is monitoring. Thank you!',
+    );
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Send Bulk Reminders'),
-        content: Text('Are you sure you want to send compliance reminders to all $count non-compliant students?'),
+        title: const Text('Send Bulk Reminders', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Customize the message that will be sent to all $count non-compliant students:',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: messageController,
+              decoration: const InputDecoration(
+                labelText: 'Bulk Message',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 4,
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
+          ElevatedButton.icon(
+            icon: const Icon(Icons.notifications_active),
+            onPressed: () async {
+              final message = messageController.text.trim();
+              if (message.isEmpty) return;
+
+              final messenger = ScaffoldMessenger.of(context);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('⚡ Bulk warnings sent to all $count non-compliant students successfully!'),
-                  backgroundColor: Colors.green,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              setState(() => _isLoading = true);
+
+              try {
+                final db = await LocalDatabase.instance.database;
+                final now = DateTime.now().toIso8601String();
+
+                // Find all non-compliant students
+                final nonCompliantStudents = _metrics.where((item) => item['is_compliant'] == false).toList();
+
+                await db.transaction((txn) async {
+                  for (var student in nonCompliantStudents) {
+                    final studentId = student['id'];
+                    final studentName = student['name'];
+                    final personalizedMessage = message.replaceAll('\$name', studentName).replaceAll('Hi,', 'Hi $studentName,');
+
+                    await txn.update(
+                      'profiles',
+                      {
+                        'reminder_message': personalizedMessage,
+                        'is_dirty': 1,
+                        'updated_at': now,
+                      },
+                      where: 'id = ?',
+                      whereArgs: [studentId],
+                    );
+                  }
+                });
+
+                // Try to trigger background sync to Supabase
+                ref.read(syncServiceProvider).syncData();
+
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('⚡ Bulk reminders sent to all $count non-compliant students!'),
+                      backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                  );
+                }
+              } finally {
+                _calculateMetrics();
+              }
             },
-            child: const Text('Send Bulk'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            label: const Text('Send Bulk'),
           ),
         ],
       ),
@@ -299,7 +428,7 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                                         const SizedBox(width: 8),
                                         IconButton(
                                           icon: const Icon(Icons.notification_add, color: Colors.red),
-                                          onPressed: () => _sendManualReminder(item['name']),
+                                          onPressed: () => _sendManualReminder(item['id'], item['name']),
                                           tooltip: 'Send Manual Reminder',
                                         ),
                                       ],
