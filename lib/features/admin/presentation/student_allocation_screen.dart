@@ -567,16 +567,9 @@ class _StudentCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (needsApproval) ...[
-                            _buildApproveButton(),
-                            const SizedBox(width: 8),
-                          ],
-                          _buildSupervisorDropdown(),
-                        ],
-                      ),
+                      if (needsApproval)
+                        _buildApproveButton(),
+                      _buildSupervisorDropdown(),
                     ],
                   );
                 },

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'local_database.dart';
@@ -80,6 +81,10 @@ class SyncService {
           await _supabase.from(remoteTable).delete().eq('id', id);
           successfullyDeletedIds.add(id);
         } else {
+          if (remoteTable == 'profiles') {
+            data.remove('email');
+            data.remove('password_hash');
+          }
           await _supabase.from(remoteTable).upsert(data);
           successfullySyncedIds.add(id);
         }
@@ -134,11 +139,60 @@ class SyncService {
             remoteData['is_dirty'] = 0;
             remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
 
+            if (localTable == 'profiles' && id.isNotEmpty) {
+              final existingLocal = await txn.query(localTable, where: 'id = ?', whereArgs: [id]);
+              if (existingLocal.isNotEmpty) {
+                remoteData['email'] = existingLocal.first['email'];
+                remoteData['password_hash'] = existingLocal.first['password_hash'];
+              }
+            }
+
             await txn.insert(
               localTable,
               remoteData,
               conflictAlgorithm: ConflictAlgorithm.replace,
             );
+
+            // Dynamically update SharedPreferences cache to prevent dashboard UI latency
+            if (localTable == 'profiles' && id.isNotEmpty) {
+              final prefs = await SharedPreferences.getInstance();
+              final role = remoteData['role']?.toString();
+              if (role != null) {
+                await prefs.setString('user_role_$id', role);
+              }
+              final fullName = remoteData['full_name']?.toString();
+              if (fullName != null) {
+                await prefs.setString('user_name_$id', fullName);
+              }
+              final status = remoteData['status']?.toString();
+              if (status != null) {
+                await prefs.setString('user_status_$id', status);
+              }
+              final supervisorId = remoteData['supervisor_id']?.toString();
+              if (supervisorId != null) {
+                await prefs.setString('user_supervisor_id_$id', supervisorId);
+              } else {
+                await prefs.remove('user_supervisor_id_$id');
+              }
+              final indSupervisorId = remoteData['industry_supervisor_id']?.toString();
+              if (indSupervisorId != null) {
+                await prefs.setString('user_industry_supervisor_id_$id', indSupervisorId);
+              } else {
+                await prefs.remove('user_industry_supervisor_id_$id');
+              }
+              final level = remoteData['level']?.toString();
+              if (level != null) {
+                await prefs.setString('user_level_$id', level);
+              } else {
+                await prefs.remove('user_level_$id');
+              }
+              final studentId = remoteData['student_id_number']?.toString();
+              if (studentId != null) {
+                await prefs.setString('user_student_id_number_$id', studentId);
+              } else {
+                await prefs.remove('user_student_id_number_$id');
+              }
+            }
           } catch (e) {
             debugPrint('Failed to pull record to $localTable in transaction: $e');
           }

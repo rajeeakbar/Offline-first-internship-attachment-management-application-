@@ -62,6 +62,61 @@ final appRouteStateProvider = Provider<AppRouteState>((ref) {
   return AppRouteState.login;
 });
 
+Future<void> _cacheProfileInPrefs(SharedPreferences prefs, String userId, Map<String, dynamic> profile) async {
+  if (userId.isEmpty) return;
+  await prefs.setString('user_role_$userId', profile['role']?.toString() ?? 'student');
+  await prefs.setString('user_name_$userId', profile['full_name']?.toString() ?? 'User');
+
+  final status = profile['status']?.toString();
+  if (status != null) {
+    await prefs.setString('user_status_$userId', status);
+  } else {
+    await prefs.remove('user_status_$userId');
+  }
+
+  final supervisorId = profile['supervisor_id']?.toString();
+  if (supervisorId != null) {
+    await prefs.setString('user_supervisor_id_$userId', supervisorId);
+  } else {
+    await prefs.remove('user_supervisor_id_$userId');
+  }
+
+  final indSupervisorId = profile['industry_supervisor_id']?.toString();
+  if (indSupervisorId != null) {
+    await prefs.setString('user_industry_supervisor_id_$userId', indSupervisorId);
+  } else {
+    await prefs.remove('user_industry_supervisor_id_$userId');
+  }
+
+  final level = profile['level']?.toString();
+  if (level != null) {
+    await prefs.setString('user_level_$userId', level);
+  } else {
+    await prefs.remove('user_level_$userId');
+  }
+
+  final studentId = profile['student_id_number']?.toString();
+  if (studentId != null) {
+    await prefs.setString('user_student_id_number_$userId', studentId);
+  } else {
+    await prefs.remove('user_student_id_number_$userId');
+  }
+
+  final companyName = profile['company_name']?.toString();
+  if (companyName != null) {
+    await prefs.setString('user_company_name_$userId', companyName);
+  } else {
+    await prefs.remove('user_company_name_$userId');
+  }
+
+  final department = profile['department']?.toString();
+  if (department != null) {
+    await prefs.setString('user_department_$userId', department);
+  } else {
+    await prefs.remove('user_department_$userId');
+  }
+}
+
 final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final user = ref.watch(currentUserProvider);
 
@@ -75,8 +130,7 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
         final results = await db.query('profiles', where: 'email = ?', whereArgs: [offlineEmail]);
         if (results.isNotEmpty) {
           final profile = results.first;
-          await prefs.setString('user_role_${profile['id']}', profile['role']?.toString() ?? 'student');
-          await prefs.setString('user_name_${profile['id']}', profile['full_name']?.toString() ?? 'User');
+          await _cacheProfileInPrefs(prefs, profile['id']?.toString() ?? '', profile);
           return profile;
         }
       } catch (e) {
@@ -92,11 +146,26 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final cachedName = prefs.getString('user_name_${user.id}');
 
   if (cachedRole != null) {
-    debugPrint('✅ Loaded role from cache: $cachedRole');
+    debugPrint('✅ Loaded profile from cache for ${user.id}');
+    final cachedStatus = prefs.getString('user_status_${user.id}');
+    final cachedSupervisorId = prefs.getString('user_supervisor_id_${user.id}');
+    final cachedIndustrySupervisorId = prefs.getString('user_industry_supervisor_id_${user.id}');
+    final cachedLevel = prefs.getString('user_level_${user.id}');
+    final cachedStudentIdNumber = prefs.getString('user_student_id_number_${user.id}');
+    final cachedCompanyName = prefs.getString('user_company_name_${user.id}');
+    final cachedDepartment = prefs.getString('user_department_${user.id}');
+
     return {
       'id': user.id,
       'role': cachedRole,
       'full_name': cachedName ?? 'User',
+      'status': cachedStatus,
+      'supervisor_id': cachedSupervisorId,
+      'industry_supervisor_id': cachedIndustrySupervisorId,
+      'level': cachedLevel,
+      'student_id_number': cachedStudentIdNumber,
+      'company_name': cachedCompanyName,
+      'department': cachedDepartment,
     };
   }
 
@@ -106,8 +175,7 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     final results = await db.query('profiles', where: 'id = ?', whereArgs: [user.id]);
     if (results.isNotEmpty) {
       final profile = results.first;
-      await prefs.setString('user_role_${user.id}', profile['role']?.toString() ?? 'student');
-      await prefs.setString('user_name_${user.id}', profile['full_name']?.toString() ?? 'User');
+      await _cacheProfileInPrefs(prefs, user.id, profile);
       return profile;
     }
   } catch (e) {
@@ -132,8 +200,7 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 
     if (response != null) {
       // Save to cache for next time
-      await prefs.setString('user_role_${user.id}', response['role'] ?? 'student');
-      await prefs.setString('user_name_${user.id}', response['full_name'] ?? '');
+      await _cacheProfileInPrefs(prefs, user.id, response);
 
       // Also insert into local SQLite DB to keep it in sync
       try {
