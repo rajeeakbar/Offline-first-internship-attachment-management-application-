@@ -130,6 +130,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isStudent = _role == 'student';
+    final isAcademicOrAdmin = _role == 'academic_supervisor' || _role == 'admin';
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
@@ -211,11 +212,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             const SizedBox(height: 16),
                             TextFormField(
                               controller: _companyController,
-                              decoration: const InputDecoration(
-                                labelText: 'Company Name',
-                                prefixIcon: Icon(Icons.business_outlined),
+                              decoration: InputDecoration(
+                                labelText: isAcademicOrAdmin ? 'Institution Name' : 'Company Name',
+                                prefixIcon: const Icon(Icons.business_outlined),
                               ),
-                              validator: (val) => val == null || val.trim().isEmpty ? 'Please enter company name' : null,
+                              validator: (val) => val == null || val.trim().isEmpty
+                                  ? (isAcademicOrAdmin ? 'Please enter institution name' : 'Please enter company name')
+                                  : null,
                             ),
                             const SizedBox(height: 16),
                             TextFormField(
