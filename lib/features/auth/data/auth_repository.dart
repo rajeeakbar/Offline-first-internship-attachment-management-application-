@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/network_utility.dart';
 
@@ -72,6 +73,43 @@ class AuthRepository {
       throw 'OFFLINE_MODE_RECOVERED';
     }
 
+    // Instant offline signup detection
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Instant offline signup activated for $email');
+      final db = await LocalDatabase.instance.database;
+      final tempId = 'temp_${const Uuid().v4()}';
+
+      await db.insert('profiles', {
+        'id': tempId,
+        'email': email,
+        'password_hash': passwordHash,
+        'full_name': fullName,
+        'role': role,
+        'student_id_number': studentId,
+        'level': level,
+        'status': 'pending',
+        'updated_at': now,
+        'is_dirty': 1,
+        'is_deleted': 0,
+      });
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_user_email', email);
+      await prefs.setString('user_role_temp', role);
+      await prefs.setString('user_name_temp', fullName);
+      if (studentId != null) {
+        await prefs.setString('user_student_id_number_temp', studentId);
+      }
+      if (level != null) {
+        await prefs.setString('user_level_temp', level);
+      }
+
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
+
     try {
       debugPrint('Attempting signup for $email');
       final response = await _client.auth.signUp(
@@ -90,20 +128,20 @@ class AuthRepository {
         // Create a profile record in the public.profiles table - students start as pending requiring admin approval
         final profileData = {
           'id': response.user!.id,
-          'email': email,
           'full_name': fullName,
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': role == 'student' ? 'pending' : 'approved',
+          'status': role == 'student' ? 'pending' : 'approved', // FIXED: Only one status assignment
           'updated_at': now,
         };
         await _client.from('profiles').upsert(profileData);
 
-        // Also cache locally with password hash for offline login
+        // Also cache locally with password hash and email for offline login
         final db = await LocalDatabase.instance.database;
         await db.insert('profiles', {
           ...profileData,
+          'email': email,
           'password_hash': passwordHash,
           'is_dirty': 0,
           'is_deleted': 0,
@@ -140,7 +178,7 @@ class AuthRepository {
           'role': role,
           'student_id_number': studentId,
           'level': level,
-          'status': role == 'student' ? 'pending' : 'approved',
+          'status': role == 'student' ? 'pending' : 'approved', // FIXED: Only one status assignment
           'updated_at': now,
           'is_dirty': 1,
           'is_deleted': 0,
@@ -149,11 +187,53 @@ class AuthRepository {
         // Store offline email so provider can "log in" the user
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('offline_user_email', email);
+        await prefs.setString('user_role_temp', role);
+        await prefs.setString('user_name_temp', fullName);
+        if (studentId != null) {
+          await prefs.setString('user_student_id_number_temp', studentId);
+        }
+        if (level != null) {
+          await prefs.setString('user_level_temp', level);
+        }
 
         throw 'OFFLINE_MODE_RECOVERED';
       }
       rethrow;
     }
+  }
+
+  Future<AuthResponse> _offlineSignInFallback(String email, String password) async {
+    // Try to verify if this user exists in our local cache
+    final db = await LocalDatabase.instance.database;
+    final passwordHash = _hashPassword(password);
+
+    final localUser = await db.query(
+        'profiles',
+        where: 'email = ? AND password_hash = ?',
+        whereArgs: [email, passwordHash]
+    );
+
+    if (localUser.isNotEmpty) {
+      // Store the offline email for providers to find the right profile
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_user_email', email);
+
+      final localId = localUser.first['id']?.toString() ?? '';
+      if (localId.isNotEmpty) {
+        await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
+        await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
+        if (localUser.first['student_id_number'] != null) {
+          await prefs.setString('user_student_id_number_$localId', localUser.first['student_id_number'].toString());
+        }
+        if (localUser.first['level'] != null) {
+          await prefs.setString('user_level_$localId', localUser.first['level'].toString());
+        }
+      }
+
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
+
+    throw 'Invalid credentials or network error. Please connect to the internet for the first sign-in.';
   }
 
   Future<AuthResponse> signIn({
@@ -168,9 +248,9 @@ class AuthRepository {
       final passwordHash = _hashPassword(password);
 
       final localUser = await db.query(
-        'profiles',
-        where: 'email = ? AND password_hash = ?',
-        whereArgs: [email, passwordHash]
+          'profiles',
+          where: 'email = ? AND password_hash = ?',
+          whereArgs: [email, passwordHash]
       );
 
       if (localUser.isNotEmpty) {
@@ -214,6 +294,7 @@ class AuthRepository {
 
           if (remoteProfile != null) {
             final Map<String, dynamic> localData = Map<String, dynamic>.from(remoteProfile);
+            localData['email'] = email; // PRESERVE EMAIL FOR OFFLINE SIGN-IN!
             localData['password_hash'] = passwordHash;
             localData['is_dirty'] = 0;
             localData['is_deleted'] = 0;
@@ -225,13 +306,19 @@ class AuthRepository {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_role_${response.user!.id}', remoteProfile['role']?.toString() ?? 'student');
             await prefs.setString('user_name_${response.user!.id}', remoteProfile['full_name']?.toString() ?? 'User');
+            if (remoteProfile['student_id_number'] != null) {
+              await prefs.setString('user_student_id_number_${response.user!.id}', remoteProfile['student_id_number'].toString());
+            }
+            if (remoteProfile['level'] != null) {
+              await prefs.setString('user_level_${response.user!.id}', remoteProfile['level'].toString());
+            }
           } else {
             // Fallback: just update email and hash if remote profile isn't found yet
             await db.update(
-              'profiles',
-              {'email': email, 'password_hash': passwordHash},
-              where: 'id = ?',
-              whereArgs: [response.user!.id]
+                'profiles',
+                {'email': email, 'password_hash': passwordHash},
+                where: 'id = ?',
+                whereArgs: [response.user!.id]
             );
           }
         } catch (e) {
@@ -242,6 +329,24 @@ class AuthRepository {
       return response;
     } on AuthException catch (e) {
       debugPrint('Auth error during signin: ${e.message} (Status: ${e.statusCode})');
+      final errStr = e.message.toLowerCase();
+      // Broad check for connection-related errors in wrapped AuthException
+      if (errStr.contains('socketexception') ||
+          errStr.contains('connection') ||
+          errStr.contains('clientexception') ||
+          errStr.contains('handshakeexception') ||
+          errStr.contains('network') ||
+          errStr.contains('unreachable') ||
+          errStr.contains('no address') ||
+          errStr.contains('failed host lookup') ||
+          errStr.contains('not connected') ||
+          errStr.contains('disconnected') ||
+          errStr.contains('timeout') ||
+          errStr.contains('software caused connection abort') ||
+          e.statusCode == '0' ||
+          e.statusCode == null) {
+        return await _offlineSignInFallback(email, password);
+      }
       rethrow;
     } catch (e) {
       debugPrint('Connection error or other: $e');
@@ -259,32 +364,7 @@ class AuthRepository {
           errStr.contains('disconnected') ||
           errStr.contains('timeout') ||
           errStr.contains('software caused connection abort')) {
-
-        // Try to verify if this user exists in our local cache
-        final db = await LocalDatabase.instance.database;
-        final passwordHash = _hashPassword(password);
-
-        final localUser = await db.query(
-          'profiles',
-          where: 'email = ? AND password_hash = ?',
-          whereArgs: [email, passwordHash]
-        );
-
-        if (localUser.isNotEmpty) {
-          // Store the offline email for providers to find the right profile
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('offline_user_email', email);
-
-          final localId = localUser.first['id']?.toString() ?? '';
-          if (localId.isNotEmpty) {
-            await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
-            await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
-          }
-
-          throw 'OFFLINE_MODE_RECOVERED';
-        }
-
-        throw 'Invalid credentials or network error. Please connect to the internet for the first sign-in.';
+        return await _offlineSignInFallback(email, password);
       }
       rethrow;
     }
@@ -323,7 +403,7 @@ class AuthRepository {
     }
   }
 
-  Future<void> resetPassword(String email) async {
+  Future<String?> resetPassword(String email) async {
     try {
       final response = await _client.functions.invoke(
         'send-reset-otp',
@@ -332,6 +412,8 @@ class AuthRepository {
       if (response.status != 200) {
         throw response.data?['error'] ?? 'Failed to send reset code';
       }
+      // Return dev_otp if present in response
+      return response.data?['dev_otp']?.toString();
     } catch (e) {
       debugPrint('Password reset code request error: $e');
       rethrow;
@@ -343,6 +425,16 @@ class AuthRepository {
     required String token,
     required String newPassword,
   }) async {
+    // Instant offline login detection
+    final connectivity = await Connectivity().checkConnectivity();
+    final isOffline = connectivity.every((result) => result == ConnectivityResult.none);
+
+    if (isOffline) {
+      debugPrint('Instant offline login activated for $email');
+      // FIXED: Should throw offline exception or handle appropriately
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
+
     try {
       final response = await _client.functions.invoke(
         'send-reset-otp',

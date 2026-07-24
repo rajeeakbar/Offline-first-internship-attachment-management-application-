@@ -58,6 +58,11 @@ class LocalDatabase {
       } catch (e) {
         // Column might already exist
       }
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN is_deleted INTEGER DEFAULT 0');
+      } catch (e) {
+        // Column might already exist
+      }
     }
 
     if (oldVersion < 8) {

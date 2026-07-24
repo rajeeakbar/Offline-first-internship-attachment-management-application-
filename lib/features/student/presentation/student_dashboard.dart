@@ -10,6 +10,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:internship_app/features/student/presentation/student_logs_list_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
+// ============================================================================
+// STUDENT DASHBOARD - FIXED VERSION
+// ============================================================================
+
 class StudentDashboard extends ConsumerStatefulWidget {
   const StudentDashboard({super.key});
 
@@ -25,16 +29,25 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
 
     return profileAsync.when(
       data: (profile) {
+        // CRITICAL FIX: Properly check status and handle null/empty values
         final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
-        if (status != 'approved') {
+
+        // Check if profile is null or not approved
+        if (profile == null || status != 'approved') {
           return const AwaitingApprovalScreen();
         }
 
-        if (profile?['supervisor_id'] == null || profile?['industry_supervisor_id'] == null) {
+        // Check if supervisors are assigned
+        final hasAcademicSupervisor = profile['supervisor_id'] != null &&
+            profile['supervisor_id'].toString().isNotEmpty;
+        final hasIndustrySupervisor = profile['industry_supervisor_id'] != null &&
+            profile['industry_supervisor_id'].toString().isNotEmpty;
+
+        if (!hasAcademicSupervisor || !hasIndustrySupervisor) {
           return const SupervisorSelectionScreen();
         }
 
-        final fullName = profile?['full_name'] ?? 'Student';
+        final fullName = profile['full_name'] ?? 'Student';
 
         return Scaffold(
           backgroundColor: theme.colorScheme.surface,
@@ -76,6 +89,8 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                     const SnackBar(content: Text('Starting synchronization...'), duration: Duration(seconds: 1)),
                   );
                   await ref.read(syncServiceProvider).syncData();
+                  // CRITICAL FIX: Invalidate profile after sync
+                  ref.invalidate(userProfileProvider);
                   if (mounted) {
                     messenger.showSnackBar(
                       const SnackBar(content: Text('Data is up to date.')),
@@ -89,6 +104,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           body: RefreshIndicator(
             onRefresh: () async {
               await ref.read(syncServiceProvider).syncData();
+              // CRITICAL FIX: Invalidate profile after refresh
+              ref.invalidate(userProfileProvider);
+              // Force rebuild
+              if (mounted) setState(() {});
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -170,6 +189,8 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
     );
   }
+
+  // ... (rest of the methods remain the same)
 
   Widget _buildSummaryCard(ThemeData theme) {
     return Container(
@@ -493,6 +514,336 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
   }
 }
 
+// ============================================================================
+// AWAITING APPROVAL SCREEN - FIXED WITH AUTO-REFRESH
+// ============================================================================
+
+class AwaitingApprovalScreen extends ConsumerStatefulWidget {
+  const AwaitingApprovalScreen({super.key});
+
+  @override
+  ConsumerState<AwaitingApprovalScreen> createState() => _AwaitingApprovalScreenState();
+}
+
+class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen> {
+  bool _isRefreshing = false;
+  bool _isAutoChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // CRITICAL FIX: Auto-check for approval when screen loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _autoCheckApproval();
+    });
+  }
+
+  Future<void> _autoCheckApproval() async {
+    if (_isAutoChecking) return;
+    setState(() => _isAutoChecking = true);
+
+    try {
+      // Force sync to get latest status
+      await ref.read(syncServiceProvider).syncData();
+      // Invalidate profile to trigger refresh
+      ref.invalidate(userProfileProvider);
+
+      // Check if user is now approved
+      final profile = ref.read(userProfileProvider).valueOrNull;
+      final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
+
+      if (status == 'approved' && mounted) {
+        // User is approved! Force rebuild
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('Auto-check approval failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isAutoChecking = false);
+      }
+    }
+  }
+
+  Future<void> _refreshStatus() async {
+    if (_isRefreshing) return;
+
+    setState(() => _isRefreshing = true);
+    try {
+      // Execute background sync to fetch latest approval status
+      await ref.read(syncServiceProvider).syncData();
+      // CRITICAL FIX: Force refresh of user profile provider
+      ref.invalidate(userProfileProvider);
+
+      // Check if user is now approved
+      final profile = ref.read(userProfileProvider).valueOrNull;
+      final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
+
+      if (mounted) {
+        if (status == 'approved') {
+          // Show success and the UI will auto-update
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✅ Account approved! Redirecting to dashboard...'),
+              backgroundColor: Colors.green,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          // Force rebuild
+          setState(() {});
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⏳ Still pending approval. Please check back later.'),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Refresh failed: $e'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final profile = ref.watch(userProfileProvider).valueOrNull;
+
+    // CRITICAL FIX: Check if user is now approved and rebuild
+    final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
+
+    // If approved, this screen will be replaced by the dashboard via the parent
+    // but we still need to handle the case where we're already on this screen
+
+    final String name = profile?['full_name'] ?? 'Student';
+    final String email = profile?['email'] ?? 'Not set';
+    final String studentId = profile?['student_id_number'] ?? 'Not set';
+
+    return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Account Status'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => ref.read(authRepositoryProvider).signOut(),
+            tooltip: 'Sign Out',
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_isAutoChecking)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                else ...[
+                  const Icon(
+                    Icons.lock_clock_outlined,
+                    size: 80,
+                    color: Colors.amber,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Awaiting Admin Approval',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Your account has been registered successfully, but must be reviewed and approved by an administrator before you can access the logbook and submit daily entries.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Your Registered Info',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const Divider(height: 24),
+                          _infoRow(context, 'Full Name', name),
+                          _infoRow(context, 'Email Address', email),
+                          _infoRow(context, 'Student ID', studentId),
+                          _infoRow(context, 'Status', 'Pending Approval', isBadge: true),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  if (_isRefreshing)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else ...[
+                    ElevatedButton.icon(
+                      onPressed: _refreshStatus,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Check Status'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () => ref.read(authRepositoryProvider).signOut(),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Sign Out of Account'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // CRITICAL FIX: Auto-refresh counter or periodic check
+                    Text(
+                      'Checking for approval...',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey[500],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildProgressTimer(),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressTimer() {
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(begin: 30, end: 0),
+      duration: const Duration(seconds: 30),
+      builder: (context, value, child) {
+        if (value == 0) {
+          // Auto-refresh when timer reaches 0
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_isRefreshing && !_isAutoChecking) {
+              _refreshStatus();
+            }
+          });
+          return const SizedBox.shrink();
+        }
+        return Text(
+          'Auto-check in ${value}s',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.grey[400],
+          ),
+        );
+      },
+      onEnd: () {
+        // Reset the animation to start again
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+  }
+
+  Widget _infoRow(BuildContext context, String label, String value, {bool isBadge = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          isBadge
+              ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+            ),
+            child: const Text(
+              'PENDING',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          )
+              : Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// SUPERVISOR SELECTION SCREEN - FIXED VERSION
+// ============================================================================
+
 class SupervisorSelectionScreen extends ConsumerStatefulWidget {
   const SupervisorSelectionScreen({super.key});
 
@@ -506,7 +857,7 @@ class _SupervisorSelectionScreenState
   final _searchController = TextEditingController();
   List<Map<String, dynamic>> _staffList = [];
   bool _isSearching = false;
-  String _activeRole = 'academic_supervisor'; // 'academic_supervisor' or 'industry_supervisor'
+  String _activeRole = 'academic_supervisor';
 
   Map<String, dynamic>? _selectedAcademic;
   Map<String, dynamic>? _selectedIndustry;
@@ -530,7 +881,7 @@ class _SupervisorSelectionScreenState
         final acadId = profile['supervisor_id'] as String?;
         final indId = profile['industry_supervisor_id'] as String?;
 
-        if (acadId != null) {
+        if (acadId != null && acadId.isNotEmpty) {
           final acadProfile = await db.query('profiles', where: 'id = ?', whereArgs: [acadId]);
           if (acadProfile.isNotEmpty && mounted) {
             setState(() {
@@ -539,7 +890,7 @@ class _SupervisorSelectionScreenState
           }
         }
 
-        if (indId != null) {
+        if (indId != null && indId.isNotEmpty) {
           final indProfile = await db.query('profiles', where: 'id = ?', whereArgs: [indId]);
           if (indProfile.isNotEmpty && mounted) {
             setState(() {
@@ -620,19 +971,23 @@ class _SupervisorSelectionScreenState
       await sb.Supabase.instance.client
           .from('profiles')
           .update({
-            'supervisor_id': _selectedAcademic!['id'],
-            'industry_supervisor_id': _selectedIndustry!['id'],
-            'updated_at': now,
-          })
+        'supervisor_id': _selectedAcademic!['id'],
+        'industry_supervisor_id': _selectedIndustry!['id'],
+        'updated_at': now,
+      })
           .eq('id', user.id);
 
       ref.read(syncServiceProvider).syncData();
+
+      // CRITICAL FIX: Invalidate profile to trigger refresh
       ref.invalidate(userProfileProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Onboarding complete! Loading dashboard...')),
         );
+        // Force rebuild
+        setState(() {});
       }
     } catch (e) {
       if (mounted) {
@@ -770,8 +1125,8 @@ class _SupervisorSelectionScreenState
                                   ? theme.colorScheme.primary
                                   : Colors.grey.withValues(alpha: 0.2),
                               width: 1.5,
-                        ),
-                      ),
+                            ),
+                          ),
                           child: Column(
                             children: [
                               Icon(
@@ -822,66 +1177,66 @@ class _SupervisorSelectionScreenState
                 const SizedBox(height: 12),
                 _isSearching
                     ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 24.0),
-                        child: Center(child: CircularProgressIndicator()),
-                      )
+                  padding: EdgeInsets.symmetric(vertical: 24.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
                     : _staffList.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24.0),
-                            child: Center(
-                              child: Text(
-                                'No supervisors found. Try searching.',
-                                style: TextStyle(color: Colors.grey[500]),
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _staffList.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 8),
-                            itemBuilder: (context, index) {
-                              final staff = _staffList[index];
-                              final isCurrentlySelected =
-                                  (_activeRole == 'academic_supervisor' &&
-                                          _selectedAcademic?['id'] == staff['id']) ||
-                                      (_activeRole == 'industry_supervisor' &&
-                                          _selectedIndustry?['id'] == staff['id']);
+                    ? Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24.0),
+                  child: Center(
+                    child: Text(
+                      'No supervisors found. Try searching.',
+                      style: TextStyle(color: Colors.grey[500]),
+                    ),
+                  ),
+                )
+                    : ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _staffList.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final staff = _staffList[index];
+                    final isCurrentlySelected =
+                        (_activeRole == 'academic_supervisor' &&
+                            _selectedAcademic?['id'] == staff['id']) ||
+                            (_activeRole == 'industry_supervisor' &&
+                                _selectedIndustry?['id'] == staff['id']);
 
-                              return Card(
-                                margin: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(
-                                    color: isCurrentlySelected
-                                        ? theme.colorScheme.primary
-                                        : Colors.transparent,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                child: ListTile(
-                                  leading: CircleAvatar(
-                                    backgroundColor: theme.colorScheme.primaryContainer,
-                                    child: Text(
-                                      (staff['full_name'] as String? ?? 'U')[0]
-                                          .toUpperCase(),
-                                      style: TextStyle(color: theme.colorScheme.primary),
-                                    ),
-                                  ),
-                                  title: Text(
-                                    staff['full_name'] ?? 'Anonymous Staff',
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                  subtitle: Text(staff['department'] ?? 'General Dept'),
-                                  trailing: isCurrentlySelected
-                                      ? const Icon(Icons.check_circle, color: Colors.green)
-                                      : const Icon(Icons.add_circle_outline,
-                                          color: Colors.indigo),
-                                  onTap: () => _selectSupervisor(staff),
-                                ),
-                              );
-                            },
+                    return Card(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: isCurrentlySelected
+                              ? theme.colorScheme.primary
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: theme.colorScheme.primaryContainer,
+                          child: Text(
+                            (staff['full_name'] as String? ?? 'U')[0]
+                                .toUpperCase(),
+                            style: TextStyle(color: theme.colorScheme.primary),
                           ),
+                        ),
+                        title: Text(
+                          staff['full_name'] ?? 'Anonymous Staff',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(staff['department'] ?? 'General Dept'),
+                        trailing: isCurrentlySelected
+                            ? const Icon(Icons.check_circle, color: Colors.green)
+                            : const Icon(Icons.add_circle_outline,
+                            color: Colors.indigo),
+                        onTap: () => _selectSupervisor(staff),
+                      ),
+                    );
+                  },
+                ),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: (_selectedAcademic == null || _selectedIndustry == null || _isSaving)
@@ -896,9 +1251,9 @@ class _SupervisorSelectionScreenState
                   child: _isSaving
                       ? const CircularProgressIndicator(color: Colors.white)
                       : const Text(
-                          'Complete Onboarding',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
+                    'Complete Onboarding',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -912,208 +1267,5 @@ class _SupervisorSelectionScreenState
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-}
-
-class AwaitingApprovalScreen extends ConsumerStatefulWidget {
-  const AwaitingApprovalScreen({super.key});
-
-  @override
-  ConsumerState<AwaitingApprovalScreen> createState() => _AwaitingApprovalScreenState();
-}
-
-class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen> {
-  bool _isRefreshing = false;
-
-  Future<void> _refresh() async {
-    setState(() => _isRefreshing = true);
-    try {
-      // Execute background sync to fetch latest approval status
-      await ref.read(syncServiceProvider).syncData();
-      // Force refresh of user profile provider
-      ref.invalidate(userProfileProvider);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Status refreshed successfully.'),
-            backgroundColor: Colors.indigo,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Refresh failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isRefreshing = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final profile = ref.watch(userProfileProvider).valueOrNull;
-
-    final String name = profile?['full_name'] ?? 'Student';
-    final String email = profile?['email'] ?? 'Not set';
-    final String studentId = profile?['student_id_number'] ?? 'Not set';
-
-    return Scaffold(
-      backgroundColor: theme.colorScheme.surface,
-      appBar: AppBar(
-        title: const Text('Account Status'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => ref.read(authRepositoryProvider).signOut(),
-            tooltip: 'Sign Out',
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(
-                  Icons.lock_clock_outlined,
-                  size: 80,
-                  color: Colors.amber,
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  'Awaiting Admin Approval',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Your account has been registered successfully, but must be reviewed and approved by an administrator before you can access the logbook and submit daily entries.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Your Registered Info',
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                        const Divider(height: 24),
-                        _infoRow(context, 'Full Name', name),
-                        _infoRow(context, 'Email Address', email),
-                        _infoRow(context, 'Student ID', studentId),
-                        _infoRow(context, 'Status', 'Pending Approval', isBadge: true),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                if (_isRefreshing)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: CircularProgressIndicator(),
-                    ),
-                  )
-                else ...[
-                  ElevatedButton.icon(
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Sync & Refresh Status'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => ref.read(authRepositoryProvider).signOut(),
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Sign Out of Account'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _infoRow(BuildContext context, String label, String value, {bool isBadge = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[500],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          isBadge
-              ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                  ),
-                  child: const Text(
-                    'PENDING',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.orange,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-              : Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-        ],
-      ),
-    );
   }
 }
