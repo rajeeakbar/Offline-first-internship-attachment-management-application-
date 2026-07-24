@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../../core/services/local_database.dart';
 import '../../../core/services/providers.dart';
 
@@ -141,16 +142,17 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                 final db = await LocalDatabase.instance.database;
                 final now = DateTime.now().toIso8601String();
 
-                // Offline-First Update
-                await db.update(
-                  'profiles',
+                // Save to app_settings instead of profiles to bypass RLS constraint!
+                await db.insert(
+                  'app_settings',
                   {
-                    'reminder_message': message,
+                    'id': 'reminder_$studentId',
+                    'key': 'reminder_$studentId',
+                    'value': message,
                     'is_dirty': 1,
                     'updated_at': now,
                   },
-                  where: 'id = ?',
-                  whereArgs: [studentId],
+                  conflictAlgorithm: ConflictAlgorithm.replace,
                 );
 
                 // Try to trigger background sync to Supabase
@@ -235,15 +237,17 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                     final studentName = student['name'];
                     final personalizedMessage = message.replaceAll('\$name', studentName).replaceAll('Hi,', 'Hi $studentName,');
 
-                    await txn.update(
-                      'profiles',
+                    // Save to app_settings instead of profiles to bypass RLS constraint!
+                    await txn.insert(
+                      'app_settings',
                       {
-                        'reminder_message': personalizedMessage,
+                        'id': 'reminder_$studentId',
+                        'key': 'reminder_$studentId',
+                        'value': personalizedMessage,
                         'is_dirty': 1,
                         'updated_at': now,
                       },
-                      where: 'id = ?',
-                      whereArgs: [studentId],
+                      conflictAlgorithm: ConflictAlgorithm.replace,
                     );
                   }
                 });

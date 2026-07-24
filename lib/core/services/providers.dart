@@ -115,13 +115,6 @@ Future<void> _cacheProfileInPrefs(SharedPreferences prefs, String userId, Map<St
   } else {
     await prefs.remove('user_department_$userId');
   }
-
-  final reminderMessage = profile['reminder_message']?.toString();
-  if (reminderMessage != null) {
-    await prefs.setString('user_reminder_message_$userId', reminderMessage);
-  } else {
-    await prefs.remove('user_reminder_message_$userId');
-  }
 }
 
 final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
@@ -161,7 +154,6 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     final cachedStudentIdNumber = prefs.getString('user_student_id_number_${user.id}');
     final cachedCompanyName = prefs.getString('user_company_name_${user.id}');
     final cachedDepartment = prefs.getString('user_department_${user.id}');
-    final cachedReminderMessage = prefs.getString('user_reminder_message_${user.id}');
 
     return {
       'id': user.id,
@@ -174,7 +166,6 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       'student_id_number': cachedStudentIdNumber,
       'company_name': cachedCompanyName,
       'department': cachedDepartment,
-      'reminder_message': cachedReminderMessage,
     };
   }
 

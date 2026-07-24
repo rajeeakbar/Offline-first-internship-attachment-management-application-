@@ -192,12 +192,6 @@ class SyncService {
               } else {
                 await prefs.remove('user_student_id_number_$id');
               }
-              final reminderMessage = remoteData['reminder_message']?.toString();
-              if (reminderMessage != null) {
-                await prefs.setString('user_reminder_message_$id', reminderMessage);
-              } else {
-                await prefs.remove('user_reminder_message_$id');
-              }
             }
           } catch (e) {
             debugPrint('Failed to pull record to $localTable in transaction: $e');
