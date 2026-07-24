@@ -128,6 +128,7 @@ class AuthRepository {
         // Create a profile record in the public.profiles table - students start as pending requiring admin approval
         final profileData = {
           'id': response.user!.id,
+          'email': email,
           'full_name': fullName,
           'role': role,
           'student_id_number': studentId,
