@@ -31,6 +31,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     'Level 100',
     'Level 200',
     'Level 300',
+    'Level 400',
+    'Post-Grad',
   ];
 
   Future<void> _signup() async {
