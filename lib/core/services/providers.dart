@@ -199,13 +199,22 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
         .timeout(const Duration(seconds: 3)); // ⏱️ 3 seconds max!
 
     if (response != null) {
+      final Map<String, dynamic> localProfile = Map<String, dynamic>.from(response);
+
+      // Decode combined full_name and email
+      final String? remoteFullName = localProfile['full_name']?.toString();
+      if (remoteFullName != null && remoteFullName.contains('|')) {
+        final parts = remoteFullName.split('|');
+        localProfile['full_name'] = parts[0].trim();
+        localProfile['email'] = parts[1].trim();
+      }
+
       // Save to cache for next time
-      await _cacheProfileInPrefs(prefs, user.id, response);
+      await _cacheProfileInPrefs(prefs, user.id, localProfile);
 
       // Also insert into local SQLite DB to keep it in sync
       try {
         final db = await ref.read(databaseProvider.future);
-        final Map<String, dynamic> localProfile = Map<String, dynamic>.from(response);
         localProfile['is_dirty'] = 0;
         localProfile['is_deleted'] = 0;
         await db.insert('profiles', localProfile, conflictAlgorithm: ConflictAlgorithm.replace);
@@ -214,7 +223,7 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
       }
 
       debugPrint('✅ Profile cached successfully.');
-      return response;
+      return localProfile;
     }
   } catch (e) {
     debugPrint('Supabase profile fetch failed: $e');
