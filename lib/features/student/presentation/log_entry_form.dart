@@ -7,8 +7,7 @@ import '../../../core/services/ai_service.dart';
 import '../../auth/data/auth_repository.dart';
 
 class LogEntryForm extends ConsumerStatefulWidget {
-  final Map<String, dynamic>? existingLog;
-  const LogEntryForm({super.key, this.existingLog});
+  const LogEntryForm({super.key});
 
   @override
   ConsumerState<LogEntryForm> createState() => _LogEntryFormState();
@@ -20,15 +19,6 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
   final _knowledgeController = TextEditingController();
   bool _isRefiningWork = false;
   bool _isRefiningKnowledge = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.existingLog != null) {
-      _workController.text = widget.existingLog!['work_description'] ?? '';
-      _knowledgeController.text = widget.existingLog!['knowledge_acquired'] ?? '';
-    }
-  }
 
   Future<void> _refineText(TextEditingController controller, bool isWork) async {
     final text = controller.text.trim();
@@ -98,55 +88,41 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
     }
 
     final db = await LocalDatabase.instance.database;
+    final logId = const Uuid().v4();
     final now = DateTime.now().toIso8601String();
-    final isEditing = widget.existingLog != null;
 
-    if (isEditing) {
-      // 1. Update Existing Log Entry
-      await db.update('log_entries', {
-        'work_description': _workController.text,
-        'knowledge_acquired': _knowledgeController.text,
-        'status': 'submitted',
-        'updated_at': now,
-        'is_dirty': 1,
-      }, where: 'id = ?', whereArgs: [widget.existingLog!['id']]);
-    } else {
-      final logId = const Uuid().v4();
-      // Calculate day number based on previous logs
-      final lastLog = await db.query(
-        'log_entries',
-        where: 'student_id = ?',
-        whereArgs: [user.id],
-        orderBy: 'day_number DESC',
-        limit: 1,
-      );
-      final int nextDayNumber = (lastLog.isNotEmpty ? (lastLog.first['day_number'] as int? ?? 0) : 0) + 1;
+    // Calculate day number based on previous logs
+    final lastLog = await db.query(
+      'log_entries',
+      where: 'student_id = ?',
+      whereArgs: [user.id],
+      orderBy: 'day_number DESC',
+      limit: 1,
+    );
+    final int nextDayNumber = (lastLog.isNotEmpty ? (lastLog.first['day_number'] as int? ?? 0) : 0) + 1;
 
-      // Save New Log Entry
-      await db.insert('log_entries', {
-        'id': logId,
-        'student_id': user.id,
-        'day_number': nextDayNumber,
-        'date': now,
-        'work_description': _workController.text,
-        'knowledge_acquired': _knowledgeController.text,
-        'status': 'submitted',
-        'updated_at': now,
-        'is_dirty': 1,
-        'is_deleted': 0,
-      });
-    }
+    // 1. Save Log Entry
+    await db.insert('log_entries', {
+      'id': logId,
+      'student_id': user.id,
+      'day_number': nextDayNumber,
+      'date': now,
+      'work_description': _workController.text,
+      'knowledge_acquired': _knowledgeController.text,
+      'status': 'submitted',
+      'updated_at': now,
+      'is_dirty': 1,
+      'is_deleted': 0,
+    });
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Row(
             children: [
-              const Icon(Icons.check_circle_outline, color: Colors.white),
-              const SizedBox(width: 12),
-              Text(isEditing
-                ? 'Log updated and resubmitted successfully (Local Cache)'
-                : 'Log saved successfully (Local Cache)'),
+              Icon(Icons.check_circle_outline, color: Colors.white),
+              SizedBox(width: 12),
+              Text('Log saved successfully (Local Cache)'),
             ],
           ),
           backgroundColor: Colors.green,
@@ -155,6 +131,7 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
       );
 
       // Invalidate providers for immediate UI update
+      // We also invalidate currentUserLogsProvider since it depends on studentLogsProvider
       ref.invalidate(studentLogsProvider(user.id));
       ref.invalidate(currentUserLogsProvider);
       ref.invalidate(internshipProgressProvider);
@@ -167,9 +144,8 @@ class _LogEntryFormState extends ConsumerState<LogEntryForm> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.existingLog != null;
     return Scaffold(
-      appBar: AppBar(title: Text(isEditing ? 'Edit & Resubmit Log' : 'Daily Log Entry')),
+      appBar: AppBar(title: const Text('Daily Log Entry')),
       body: Form(
         key: _formKey,
         child: ListView(
