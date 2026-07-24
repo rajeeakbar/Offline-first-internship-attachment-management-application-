@@ -82,7 +82,6 @@ class SyncService {
           successfullyDeletedIds.add(id);
         } else {
           if (remoteTable == 'profiles') {
-            data.remove('email');
             data.remove('password_hash');
           }
           await _supabase.from(remoteTable).upsert(data);
