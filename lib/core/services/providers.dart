@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/local_database.dart';
 import '../services/sync_service.dart';
+import '../services/network_utility.dart';
 import '../../features/auth/data/auth_repository.dart';
 
 final localDbProvider = Provider<LocalDatabase>((ref) => LocalDatabase.instance);
@@ -113,9 +114,15 @@ final userProfileProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
     debugPrint('Local SQLite profile check failed: $e');
   }
 
-  // 3️⃣ THIRD: If cache/local DB is empty, fetch from Supabase (with timeout)
+  // 3️⃣ THIRD: If cache/local DB is empty, fetch from Supabase (with timeout, only if online)
   try {
-    debugPrint('🔍 No cache or local SQLite row, fetching from Supabase...');
+    debugPrint('🔍 No cache or local SQLite row, checking internet connectivity first...');
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('🔌 Bypassing Supabase fetch because device is offline.');
+      throw Exception('Offline');
+    }
+    debugPrint('🔍 Fetching from Supabase...');
     final response = await Supabase.instance.client
         .from('profiles')
         .select()

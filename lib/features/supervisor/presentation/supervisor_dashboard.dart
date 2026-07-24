@@ -35,7 +35,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
               final isOnline = results.any((r) => r != ConnectivityResult.none);
               if (isOnline) return const SizedBox.shrink();
               return Container(
-                color: Colors.orange.withOpacity(0.9),
+                color: Colors.orange.withValues(alpha: 0.9),
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: const Text(
@@ -127,7 +127,7 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -181,10 +181,10 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
   Widget _buildStatsOverview(ThemeData theme, int studentCount) {
     return Card(
       elevation: 0,
-      color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.1)),
+        side: BorderSide(color: theme.colorScheme.primary.withValues(alpha: 0.1)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
@@ -502,7 +502,7 @@ class _BrowseStudentsScreenState extends ConsumerState<BrowseStudentsScreen> {
                                     ? ElevatedButton.icon(
                                         onPressed: () => _toggleAssignment(student, false),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red.withOpacity(0.1),
+                                          backgroundColor: Colors.red.withValues(alpha: 0.1),
                                           foregroundColor: Colors.red,
                                           elevation: 0,
                                         ),

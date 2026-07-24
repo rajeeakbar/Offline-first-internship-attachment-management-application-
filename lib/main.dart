@@ -14,7 +14,7 @@ void main() async {
 
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
-    anonKey: AppConfig.supabaseAnonKey,
+    publishableKey: AppConfig.supabaseAnonKey,
   );
 
   runApp(
@@ -70,7 +70,7 @@ class InternshipApp extends ConsumerWidget {
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.indigo.withOpacity(0.1)),
+            borderSide: BorderSide(color: Colors.indigo.withValues(alpha: 0.1)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -112,7 +112,7 @@ class InternshipApp extends ConsumerWidget {
             alignment: Alignment.center,
             children: <Widget>[
               ...previousChildren,
-              if (currentChild != null) currentChild,
+              if (currentChild != null) ...[currentChild],
             ],
           );
         },

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dart_openai/dart_openai.dart'; // This talks to NVIDIA via OpenAI-compatible endpoint
 import '../config/supabase_config.dart';
+import 'network_utility.dart';
 
 final aiServiceProvider = Provider((ref) => AIService());
 
@@ -22,6 +23,10 @@ class AIService {
       return;
     }
 
+    if (!apiKey.startsWith('nvapi-')) {
+      debugPrint('⚠️ Warning: API Key does not start with expected "nvapi-" prefix. Initializing anyway...');
+    }
+
     try {
       // Connect to NVIDIA Free AI
       OpenAI.baseUrl = 'https://integrate.api.nvidia.com';
@@ -39,14 +44,21 @@ class AIService {
   Future<String> refineLog(String input) async {
     if (input.trim().isEmpty) return input;
 
+    // Check internet connection first to avoid timeout latency
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('⚠️ Device offline, bypassing NVIDIA API to use local backup text-fixer.');
+      return _refineHeuristic(input);
+    }
+
     // Double check initialization in case of race conditions
     if (!_isInitialized) {
       _initialize();
     }
 
-    // If the internet is off or NVIDIA fails, we use the backup fixer (heuristic)
+    // If setup failed or key is missing, we use the backup fixer
     if (!_isInitialized) {
-      debugPrint('⚠️ No internet/key, using backup text-fixer.');
+      debugPrint('⚠️ AI Service not initialized, using backup text-fixer.');
       return _refineHeuristic(input);
     }
 
@@ -104,6 +116,14 @@ class AIService {
   /// Generates a weekly summary of internship activities.
   Future<String> generateWeeklySummary(List<Map<String, dynamic>> logs) async {
     if (logs.isEmpty) return 'No progress recorded this week.';
+
+    // Check internet connection first to avoid timeout latency
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('⚠️ Device offline, bypassing NVIDIA API to use local weekly summary fallback.');
+      final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
+      return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved.';
+    }
 
     // Double check initialization in case of race conditions
     if (!_isInitialized) {

@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'local_database.dart';
+import 'network_utility.dart';
 
 class SyncService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -31,10 +32,10 @@ class SyncService {
   Future<void> syncData() async {
     if (_isSyncing) return;
 
-    // Check connectivity before starting to avoid unnecessary work/failures
-    final connectivity = await Connectivity().checkConnectivity();
-    if (connectivity.every((result) => result == ConnectivityResult.none)) {
-      debugPrint('Sync skipped: No active internet connection.');
+    // Check active internet capability before starting to avoid unnecessary work/failures
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('Sync skipped: No active internet capability detected.');
       return;
     }
 
@@ -60,6 +61,9 @@ class SyncService {
     // 1. Push local changes to Cloud
     final dirtyRecords = await db.query(localTable, where: 'is_dirty = ?', whereArgs: [1]);
 
+    final List<String> successfullySyncedIds = [];
+    final List<String> successfullyDeletedIds = [];
+
     for (var record in dirtyRecords) {
       try {
         final Map<String, dynamic> data = Map.from(record);
@@ -74,14 +78,26 @@ class SyncService {
 
         if (isDeleted) {
           await _supabase.from(remoteTable).delete().eq('id', id);
-          await db.delete(localTable, where: 'id = ?', whereArgs: [id]);
+          successfullyDeletedIds.add(id);
         } else {
           await _supabase.from(remoteTable).upsert(data);
-          await db.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
+          successfullySyncedIds.add(id);
         }
       } catch (e) {
         debugPrint('Failed to push record from $localTable: $e');
       }
+    }
+
+    // Run batch SQLite transaction to finalize pushed records
+    if (successfullySyncedIds.isNotEmpty || successfullyDeletedIds.isNotEmpty) {
+      await db.transaction((txn) async {
+        for (var id in successfullySyncedIds) {
+          await txn.update(localTable, {'is_dirty': 0}, where: 'id = ?', whereArgs: [id]);
+        }
+        for (var id in successfullyDeletedIds) {
+          await txn.delete(localTable, where: 'id = ?', whereArgs: [id]);
+        }
+      });
     }
 
     // 2. Pull changes from Cloud (Incremental)
@@ -95,35 +111,39 @@ class SyncService {
 
     final remoteRecords = await query;
 
-    for (var remoteRecord in remoteRecords) {
-      try {
-        final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord as Map);
-        final String id = remoteData['id']?.toString() ?? '';
+    if (remoteRecords.isNotEmpty) {
+      await db.transaction((txn) async {
+        for (var remoteRecord in remoteRecords) {
+          try {
+            final Map<String, dynamic> remoteData = Map<String, dynamic>.from(remoteRecord as Map);
+            final String id = remoteData['id']?.toString() ?? '';
 
-        if (id.isNotEmpty) {
-          // Check if there is a local record with is_dirty = 1 (meaning offline wins)
-          final localRecord = await db.query(localTable, where: 'id = ?', whereArgs: [id]);
-          if (localRecord.isNotEmpty) {
-            final int isDirty = int.tryParse(localRecord.first['is_dirty']?.toString() ?? '0') ?? 0;
-            if (isDirty == 1) {
-              // Local record has unsynced offline changes: offline wins, skip overwriting
-              debugPrint('Offline Wins: Skip overwriting unsynced local record $id in $localTable with cloud data');
-              continue;
+            if (id.isNotEmpty) {
+              // Check if there is a local record with is_dirty = 1 (meaning offline wins)
+              final localRecord = await txn.query(localTable, where: 'id = ?', whereArgs: [id]);
+              if (localRecord.isNotEmpty) {
+                final int isDirty = int.tryParse(localRecord.first['is_dirty']?.toString() ?? '0') ?? 0;
+                if (isDirty == 1) {
+                  // Local record has unsynced offline changes: offline wins, skip overwriting
+                  debugPrint('Offline Wins: Skip overwriting unsynced local record $id in $localTable with cloud data');
+                  continue;
+                }
+              }
             }
+
+            remoteData['is_dirty'] = 0;
+            remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
+
+            await txn.insert(
+              localTable,
+              remoteData,
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          } catch (e) {
+            debugPrint('Failed to pull record to $localTable in transaction: $e');
           }
         }
-
-        remoteData['is_dirty'] = 0;
-        remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
-
-        await db.insert(
-          localTable,
-          remoteData,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
-      } catch (e) {
-        debugPrint('Failed to pull record to $localTable: $e');
-      }
+      });
     }
   }
 

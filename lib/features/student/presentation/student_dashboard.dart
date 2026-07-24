@@ -55,7 +55,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                   final isOnline = results.any((r) => r != ConnectivityResult.none);
                   if (isOnline) return const SizedBox.shrink();
                   return Container(
-                    color: Colors.orange.withOpacity(0.9),
+                    color: Colors.orange.withValues(alpha: 0.9),
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 4),
                     child: const Text(
@@ -175,14 +175,14 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withOpacity(0.8)],
+          colors: [theme.colorScheme.primary, theme.colorScheme.primary.withValues(alpha: 0.8)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.primary.withOpacity(0.3),
+            color: theme.colorScheme.primary.withValues(alpha: 0.3),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -214,7 +214,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -270,7 +270,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                 Icon(
                   Icons.assignment_outlined,
                   size: 64,
-                  color: theme.colorScheme.onSurface.withOpacity(0.1),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.1),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -296,7 +296,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
+                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
               ),
               child: ListTile(
                 contentPadding: const EdgeInsets.all(12),
@@ -370,9 +370,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.05),
+          color: color.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.1)),
+          border: Border.all(color: color.withValues(alpha: 0.1)),
         ),
         child: Column(
           children: [
@@ -412,9 +412,9 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         status.toUpperCase(),
@@ -433,7 +433,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
           child: LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
             minHeight: 12,
-            backgroundColor: isWhite ? Colors.white.withOpacity(0.2) : theme.colorScheme.primary.withOpacity(0.1),
+            backgroundColor: isWhite ? Colors.white.withValues(alpha: 0.2) : theme.colorScheme.primary.withValues(alpha: 0.1),
             valueColor: AlwaysStoppedAnimation<Color>(isWhite ? Colors.white : theme.colorScheme.primary),
           ),
         );
@@ -449,7 +449,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
       data: (data) => Text(
         '${data['count']} of ${data['goal']} days completed',
         style: TextStyle(
-          color: isWhite ? Colors.white.withOpacity(0.9) : theme.colorScheme.onSurfaceVariant,
+          color: isWhite ? Colors.white.withValues(alpha: 0.9) : theme.colorScheme.onSurfaceVariant,
           fontSize: 13,
         ),
       ),
@@ -474,7 +474,7 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: (isOnline ? Colors.green : Colors.orange).withOpacity(0.4),
+                  color: (isOnline ? Colors.green : Colors.orange).withValues(alpha: 0.4),
                   blurRadius: 4,
                   spreadRadius: 2,
                 ),
@@ -707,12 +707,12 @@ class _SupervisorSelectionScreenState
                           decoration: BoxDecoration(
                             color: _activeRole == 'academic_supervisor'
                                 ? theme.colorScheme.primaryContainer
-                                : Colors.grey.withOpacity(0.05),
+                                : Colors.grey.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: _activeRole == 'academic_supervisor'
                                   ? theme.colorScheme.primary
-                                  : Colors.grey.withOpacity(0.2),
+                                  : Colors.grey.withValues(alpha: 0.2),
                               width: 1.5,
                             ),
                           ),
@@ -763,12 +763,12 @@ class _SupervisorSelectionScreenState
                           decoration: BoxDecoration(
                             color: _activeRole == 'industry_supervisor'
                                 ? theme.colorScheme.primaryContainer
-                                : Colors.grey.withOpacity(0.05),
+                                : Colors.grey.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: _activeRole == 'industry_supervisor'
                                   ? theme.colorScheme.primary
-                                  : Colors.grey.withOpacity(0.2),
+                                  : Colors.grey.withValues(alpha: 0.2),
                               width: 1.5,
                         ),
                       ),
@@ -1010,7 +1010,7 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.grey.withOpacity(0.15)),
+                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
@@ -1075,7 +1075,6 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
   }
 
   Widget _infoRow(BuildContext context, String label, String value, {bool isBadge = false}) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Row(
@@ -1093,9 +1092,9 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
               ? Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.1),
+                    color: Colors.amber.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
                   ),
                   child: const Text(
                     'PENDING',
