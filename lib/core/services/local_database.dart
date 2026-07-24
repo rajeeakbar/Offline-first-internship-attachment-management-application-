@@ -19,7 +19,7 @@ class LocalDatabase {
 
     return await openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -60,6 +60,14 @@ class LocalDatabase {
       }
       try {
         await db.execute('ALTER TABLE profiles ADD COLUMN is_deleted INTEGER DEFAULT 0');
+      } catch (e) {
+        // Column might already exist
+      }
+    }
+
+    if (oldVersion < 9) {
+      try {
+        await db.execute('ALTER TABLE profiles ADD COLUMN reminder_message TEXT');
       } catch (e) {
         // Column might already exist
       }
@@ -128,6 +136,7 @@ class LocalDatabase {
         level $nullableTextType,
         company_name $nullableTextType,
         status $nullableTextType,
+        reminder_message $nullableTextType,
         updated_at $timestampType,
         is_dirty $boolType,
         is_deleted $boolType

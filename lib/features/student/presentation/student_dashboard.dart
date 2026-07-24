@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:internship_app/features/auth/data/auth_repository.dart';
 import 'package:internship_app/core/services/local_database.dart';
 import 'package:internship_app/features/student/presentation/pdf_export_service.dart';
@@ -115,6 +116,95 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (profile['reminder_message'] != null && profile['reminder_message'].toString().trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 20.0),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Colors.orange.shade600, Colors.red.shade600],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.red.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(Icons.crisis_alert_rounded, color: Colors.white, size: 28),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'ADMINISTRATOR WARNING',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 11,
+                                        letterSpacing: 1.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      profile['reminder_message'].toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.check_circle_outline_rounded, color: Colors.white),
+                                tooltip: 'Acknowledge Reminder',
+                                onPressed: () async {
+                                  final db = await LocalDatabase.instance.database;
+                                  final now = DateTime.now().toIso8601String();
+                                  final userId = profile['id'];
+
+                                  // Clear locally
+                                  await db.update(
+                                    'profiles',
+                                    {
+                                      'reminder_message': null,
+                                      'is_dirty': 1,
+                                      'updated_at': now,
+                                    },
+                                    where: 'id = ?',
+                                    whereArgs: [userId],
+                                  );
+
+                                  // Clear in SharedPreferences
+                                  final prefs = await SharedPreferences.getInstance();
+                                  await prefs.remove('user_reminder_message_$userId');
+
+                                  // Invalidate to refresh UI
+                                  ref.invalidate(userProfileProvider);
+
+                                  // Trigger background sync
+                                  ref.read(syncServiceProvider).syncData();
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   Row(
                     children: [
                       Expanded(
