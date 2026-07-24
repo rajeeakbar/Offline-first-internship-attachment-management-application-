@@ -620,9 +620,6 @@ class _AwaitingApprovalScreenState extends ConsumerState<AwaitingApprovalScreen>
     final theme = Theme.of(context);
     final profile = ref.watch(userProfileProvider).valueOrNull;
 
-    // CRITICAL FIX: Check if user is now approved and rebuild
-    final status = profile?['status']?.toString().toLowerCase() ?? 'pending';
-
     // If approved, this screen will be replaced by the dashboard via the parent
     // but we still need to handle the case where we're already on this screen
 
