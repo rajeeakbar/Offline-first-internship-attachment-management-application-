@@ -70,10 +70,10 @@ class _SupervisorDashboardState extends ConsumerState<SupervisorDashboard> {
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
                   sliver: SliverToBoxAdapter(
                     child: Card(
-                      color: Colors.orange.withValues(alpha: 0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+                        side: BorderSide(color: Colors.orange.withOpacity(0.4), width: 1.5),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),

@@ -178,10 +178,10 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                         padding: const EdgeInsets.all(16.0),
                         sliver: SliverToBoxAdapter(
                           child: Card(
-                            color: Colors.red.withValues(alpha: 0.05),
+                            color: Colors.red.withOpacity(0.05),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(color: Colors.red.withValues(alpha: 0.2), width: 1.5),
+                              side: BorderSide(color: Colors.red.withOpacity(0.2), width: 1.5),
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -246,7 +246,7 @@ class _CompletionMetricsScreenState extends ConsumerState<CompletionMetricsScree
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: (isCompliant ? Colors.green : Colors.red).withValues(alpha: 0.1),
+                                          color: (isCompliant ? Colors.green : Colors.red).withOpacity(0.1),
                                           borderRadius: BorderRadius.circular(8),
                                         ),
                                         child: Text(

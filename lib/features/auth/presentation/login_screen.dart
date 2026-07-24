@@ -237,8 +237,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.15),
-                        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+                        color: Colors.amber.withOpacity(0.15),
+                        border: Border.all(color: Colors.amber.withOpacity(0.5)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Column(

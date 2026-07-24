@@ -126,10 +126,10 @@ class _StudentDashboardState extends ConsumerState<StudentDashboard> {
                   if (profile?['status'] != 'approved') ...[
                     const SizedBox(height: 16),
                     Card(
-                      color: Colors.orange.withValues(alpha: 0.1),
+                      color: Colors.orange.withOpacity(0.1),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
-                        side: BorderSide(color: Colors.orange.withValues(alpha: 0.4), width: 1.5),
+                        side: BorderSide(color: Colors.orange.withOpacity(0.4), width: 1.5),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -772,7 +772,7 @@ class _SupervisorSelectionScreenState
                 ),
                 const SizedBox(height: 20),
                 Card(
-                  color: Colors.green.withValues(alpha: 0.05),
+                  color: Colors.green.withOpacity(0.05),
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(

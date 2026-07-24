@@ -270,7 +270,7 @@ class _AccountManagementScreenState extends ConsumerState<AccountManagementScree
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                                side: BorderSide(color: Colors.grey.withOpacity(0.1)),
                               ),
                               child: ListTile(
                                 contentPadding: const EdgeInsets.all(16),
@@ -379,7 +379,7 @@ class _AccountManagementScreenState extends ConsumerState<AccountManagementScree
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

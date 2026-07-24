@@ -176,7 +176,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: Colors.grey.withValues(alpha: 0.1)),
+                    side: BorderSide(color: Colors.grey.withOpacity(0.1)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(20.0),
