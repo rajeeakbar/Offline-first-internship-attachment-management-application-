@@ -129,9 +129,9 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,7 +149,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
             title,
             style: theme.textTheme.bodySmall?.copyWith(
               fontWeight: FontWeight.w600,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
             ),
           ),
         ],
@@ -166,7 +166,7 @@ class _AdminDashboardState extends ConsumerState<AdminDashboard> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withOpacity(0.1),
+            color: theme.colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: theme.colorScheme.primary),

@@ -7,6 +7,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import '../../../core/services/local_database.dart';
+import '../../../core/services/network_utility.dart';
 
 final authRepositoryProvider = Provider((ref) => AuthRepository(Supabase.instance.client));
 
@@ -42,6 +43,34 @@ class AuthRepository {
   }) async {
     final now = DateTime.now().toIso8601String();
     final passwordHash = _hashPassword(password);
+
+    // Upfront active internet connection check to bypass timeouts
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('Upfront network check: Device is offline. Running offline signup fallback...');
+      final db = await LocalDatabase.instance.database;
+      final tempId = 'temp_${const Uuid().v4()}';
+
+      await db.insert('profiles', {
+        'id': tempId,
+        'email': email,
+        'password_hash': passwordHash,
+        'full_name': fullName,
+        'role': role,
+        'student_id_number': studentId,
+        'level': level,
+        'status': role == 'student' ? 'pending' : 'approved',
+        'updated_at': now,
+        'is_dirty': 1,
+        'is_deleted': 0,
+      });
+
+      // Store offline email so provider can "log in" the user
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('offline_user_email', email);
+
+      throw 'OFFLINE_MODE_RECOVERED';
+    }
 
     try {
       debugPrint('Attempting signup for $email');
@@ -131,6 +160,36 @@ class AuthRepository {
     required String email,
     required String password,
   }) async {
+    // Upfront active internet connection check to bypass timeouts
+    final hasInternet = await NetworkUtility.instance.hasInternetAccess();
+    if (!hasInternet) {
+      debugPrint('Upfront network check: Device is offline. Running offline signin cache check...');
+      final db = await LocalDatabase.instance.database;
+      final passwordHash = _hashPassword(password);
+
+      final localUser = await db.query(
+        'profiles',
+        where: 'email = ? AND password_hash = ?',
+        whereArgs: [email, passwordHash]
+      );
+
+      if (localUser.isNotEmpty) {
+        // Store the offline email for providers to find the right profile
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('offline_user_email', email);
+
+        final localId = localUser.first['id']?.toString() ?? '';
+        if (localId.isNotEmpty) {
+          await prefs.setString('user_role_$localId', localUser.first['role']?.toString() ?? 'student');
+          await prefs.setString('user_name_$localId', localUser.first['full_name']?.toString() ?? 'User');
+        }
+
+        throw 'OFFLINE_MODE_RECOVERED';
+      }
+
+      throw 'Invalid credentials or network error. Please connect to the internet for the first sign-in.';
+    }
+
     try {
       debugPrint('Attempting signin for $email');
       // Tightened timeout to trigger offline fallback faster
