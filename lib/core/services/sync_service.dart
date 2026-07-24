@@ -83,6 +83,16 @@ class SyncService {
         } else {
           if (remoteTable == 'profiles') {
             data.remove('password_hash');
+
+            // Encode email into full_name if email exists to sync to other devices/users
+            final String? email = data['email']?.toString();
+            final String? fullName = data['full_name']?.toString();
+            if (email != null && email.isNotEmpty && fullName != null && fullName.isNotEmpty) {
+              if (!fullName.contains('|')) {
+                data['full_name'] = '$fullName | $email';
+              }
+            }
+            data.remove('email');
           }
           await _supabase.from(remoteTable).upsert(data);
           successfullySyncedIds.add(id);
@@ -138,10 +148,22 @@ class SyncService {
             remoteData['is_dirty'] = 0;
             remoteData['is_deleted'] = remoteData['is_deleted'] ?? 0;
 
+            if (localTable == 'profiles') {
+              // Decode full_name and email from combined field
+              final String? remoteFullName = remoteData['full_name']?.toString();
+              if (remoteFullName != null && remoteFullName.contains('|')) {
+                final parts = remoteFullName.split('|');
+                remoteData['full_name'] = parts[0].trim();
+                remoteData['email'] = parts[1].trim();
+              }
+            }
+
             if (localTable == 'profiles' && id.isNotEmpty) {
               final existingLocal = await txn.query(localTable, where: 'id = ?', whereArgs: [id]);
               if (existingLocal.isNotEmpty) {
-                remoteData['email'] = existingLocal.first['email'];
+                if (remoteData['email'] == null || remoteData['email'].toString().isEmpty) {
+                  remoteData['email'] = existingLocal.first['email'];
+                }
                 remoteData['password_hash'] = existingLocal.first['password_hash'];
               }
             }

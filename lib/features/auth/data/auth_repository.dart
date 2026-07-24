@@ -128,8 +128,7 @@ class AuthRepository {
         // Create a profile record in the public.profiles table - students start as pending requiring admin approval
         final profileData = {
           'id': response.user!.id,
-          'email': email,
-          'full_name': fullName,
+          'full_name': '$fullName | $email',
           'role': role,
           'student_id_number': studentId,
           'level': level,
@@ -143,6 +142,7 @@ class AuthRepository {
         await db.insert('profiles', {
           ...profileData,
           'email': email,
+          'full_name': fullName, // Keep clean in local DB
           'password_hash': passwordHash,
           'is_dirty': 0,
           'is_deleted': 0,
@@ -295,7 +295,17 @@ class AuthRepository {
 
           if (remoteProfile != null) {
             final Map<String, dynamic> localData = Map<String, dynamic>.from(remoteProfile);
-            localData['email'] = email; // PRESERVE EMAIL FOR OFFLINE SIGN-IN!
+
+            // Decode combined full_name and email
+            final String? remoteFullName = localData['full_name']?.toString();
+            if (remoteFullName != null && remoteFullName.contains('|')) {
+              final parts = remoteFullName.split('|');
+              localData['full_name'] = parts[0].trim();
+              localData['email'] = parts[1].trim();
+            } else {
+              localData['email'] = email; // PRESERVE EMAIL FOR OFFLINE SIGN-IN!
+            }
+
             localData['password_hash'] = passwordHash;
             localData['is_dirty'] = 0;
             localData['is_deleted'] = 0;
@@ -306,7 +316,7 @@ class AuthRepository {
             // Cache in SharedPreferences for instant 0ms startup
             final prefs = await SharedPreferences.getInstance();
             await prefs.setString('user_role_${response.user!.id}', remoteProfile['role']?.toString() ?? 'student');
-            await prefs.setString('user_name_${response.user!.id}', remoteProfile['full_name']?.toString() ?? 'User');
+            await prefs.setString('user_name_${response.user!.id}', localData['full_name']?.toString() ?? 'User');
             if (remoteProfile['student_id_number'] != null) {
               await prefs.setString('user_student_id_number_${response.user!.id}', remoteProfile['student_id_number'].toString());
             }
