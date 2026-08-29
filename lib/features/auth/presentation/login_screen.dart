@@ -96,24 +96,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 Text(
-                  'Welcome Back',
+                  'Internship portal',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
-                  'Sign in to your internship portal',
+                  'Sign in to access your portal',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.grey[600],
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 const Text(
-                  'v2.1 - Enhanced Performance',
+                  'Enter your credentials to continue',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 10, color: Colors.indigo, fontWeight: FontWeight.bold),
                 ),
