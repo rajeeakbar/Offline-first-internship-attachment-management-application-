@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dart_openai/dart_openai.dart'; // This talks to NVIDIA via OpenAI-compatible endpoint
+import 'package:dart_openai/dart_openai.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'dart:math';
 import '../config/supabase_config.dart';
 import 'network_utility.dart';
 
@@ -8,13 +11,16 @@ final aiServiceProvider = Provider((ref) => AIService());
 
 class AIService {
   bool _isInitialized = false;
+  String _activeApiKey = '';
 
   AIService() {
     _initialize();
   }
 
   void _initialize() {
-    final apiKey = AppConfig.geminiApiKey.trim(); // We keep using geminiApiKey from config, which now holds the NVIDIA API Key
+    // Sanitize and clean the API key
+    String apiKey = AppConfig.geminiApiKey.trim();
+    apiKey = apiKey.replaceAll(RegExp(r'\s'), '').replaceAll('"', '').replaceAll("'", '');
 
     // Stop if there is no key
     if (apiKey.isEmpty || apiKey == 'YOUR_GEMINI_KEY') {
@@ -28,19 +34,20 @@ class AIService {
     }
 
     try {
-      // Connect to NVIDIA Free AI
-      OpenAI.baseUrl = 'https://integrate.api.nvidia.com';
-      OpenAI.apiKey = apiKey; // Your NVIDIA key goes here
+      // Connect to NVIDIA AI API using the correct /v1 endpoint
+      OpenAI.baseUrl = 'https://integrate.api.nvidia.com/v1';
+      OpenAI.apiKey = apiKey;
+      _activeApiKey = apiKey;
 
       _isInitialized = true;
-      debugPrint('✅ App is now connected to NVIDIA Free AI.');
+      debugPrint('✅ App is connected to NVIDIA AI at: ${OpenAI.baseUrl} (Key prefix: ${apiKey.substring(0, min(10, apiKey.length))}...)');
     } catch (e) {
       debugPrint('❌ Setup Error: $e');
       _isInitialized = false;
     }
   }
 
-  /// This is the button you press to make your log sound professional.
+  /// Refines a student's daily log entry to sound highly professional.
   Future<String> refineLog(String input) async {
     if (input.trim().isEmpty) return input;
 
@@ -65,9 +72,9 @@ class AIService {
     debugPrint('📤 Sending your log to NVIDIA AI...');
 
     try {
-      // Send the prompt to the meta/llama-3.1-8b-instruct model on NVIDIA
+      // Send the prompt using the active NVIDIA model
       final chatCompletion = await OpenAI.instance.chat.create(
-        model: 'meta/llama-3.1-8b-instruct', // A very good free model from NVIDIA
+        model: 'meta/llama-3.2-11b-vision-instruct',
         messages: [
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.user,
@@ -103,26 +110,82 @@ class AIService {
         debugPrint('✅ AI Fixed it!');
         return refinedText.trim();
       } else {
-        // If NVIDIA gives us nothing, use the backup fixer
-        return _refineHeuristic(input);
+        return await _refineLogManual(input);
       }
     } catch (e) {
-      // If NVIDIA breaks (no internet, etc.), use the backup fixer
-      debugPrint('❌ NVIDIA Error: $e. Using backup fixer.');
-      return _refineHeuristic(input);
+      debugPrint('❌ NVIDIA SDK Error: $e. Attempting manual HTTP fallback...');
+      return await _refineLogManual(input);
     }
+  }
+
+  /// Manual HTTP request fallback in case the SDK encounters issues.
+  Future<String> _refineLogManual(String input) async {
+    try {
+      final url = Uri.parse('https://integrate.api.nvidia.com/v1/chat/completions');
+      final apiKey = _activeApiKey.isNotEmpty ? _activeApiKey : AppConfig.geminiApiKey.trim();
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'model': 'meta/llama-3.2-11b-vision-instruct',
+          'messages': [
+            {
+              'role': 'user',
+              'content': '''
+              Act as a professional industrial attachment/internship supervisor.
+              Your task is to rewrite the student's daily log entry to be highly professional and suitable for a formal university report.
+
+              Guidelines:
+              - Use industry-standard terminology and active professional verbs.
+              - Maintain a formal tone.
+              - Correct grammatical errors.
+              - Return ONLY the rewritten text, without introductory or concluding conversational filler.
+
+              Student's Original Entry: "$input"
+              '''
+            }
+          ],
+          'max_tokens': 200,
+          'temperature': 0.7,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices']?[0]?['message']?['content'];
+        if (content != null && content.toString().trim().isNotEmpty) {
+          debugPrint('✅ Manual HTTP request succeeded!');
+          return content.toString().trim();
+        }
+      } else {
+        debugPrint('❌ HTTP Error: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      debugPrint('❌ Manual HTTP Fallback Error: $e');
+    }
+
+    return _refineHeuristic(input);
   }
 
   /// Generates a weekly summary of internship activities.
   Future<String> generateWeeklySummary(List<Map<String, dynamic>> logs) async {
     if (logs.isEmpty) return 'No progress recorded this week.';
 
+    String fallbackSummary() {
+      final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
+      return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved.';
+    }
+
     // Check internet connection first to avoid timeout latency
     final hasInternet = await NetworkUtility.instance.hasInternetAccess();
     if (!hasInternet) {
       debugPrint('⚠️ Device offline, bypassing NVIDIA API to use local weekly summary fallback.');
-      final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
-      return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved.';
+      return fallbackSummary();
     }
 
     // Double check initialization in case of race conditions
@@ -131,14 +194,13 @@ class AIService {
     }
 
     if (!_isInitialized) {
-      final activities = logs.take(5).map((l) => l['work_description']?.toString() ?? '').where((s) => s.isNotEmpty).join(', ');
-      return 'Summary of Week: Primary activities focused on $activities. Significant milestones were achieved.';
+      return fallbackSummary();
     }
 
     try {
       final descriptions = logs.map((l) => '- ${l['work_description']}').join('\n');
       final chatCompletion = await OpenAI.instance.chat.create(
-        model: 'meta/llama-3.1-8b-instruct',
+        model: 'meta/llama-3.2-11b-vision-instruct',
         messages: [
           OpenAIChatCompletionChoiceMessageModel(
             role: OpenAIChatMessageRole.user,
@@ -154,10 +216,43 @@ class AIService {
       );
 
       final summaryText = chatCompletion.choices.first.message.content?.first.text;
-      return summaryText?.trim() ?? 'Summary generation failed.';
+      if (summaryText != null && summaryText.trim().isNotEmpty) {
+        return summaryText.trim();
+      }
     } catch (e) {
       debugPrint('NVIDIA API Error (generateWeeklySummary): $e');
-      return 'Failed to generate automated summary due to connection issues.';
+    }
+
+    return fallbackSummary();
+  }
+
+  /// Diagnostic method to test API connection.
+  Future<bool> testApiConnection() async {
+    try {
+      debugPrint('🔍 Testing NVIDIA API connection...');
+      final testCompletion = await OpenAI.instance.chat.create(
+        model: 'meta/llama-3.2-11b-vision-instruct',
+        messages: [
+          OpenAIChatCompletionChoiceMessageModel(
+            role: OpenAIChatMessageRole.user,
+            content: [
+              OpenAIChatCompletionChoiceMessageContentItemModel.text('Say "Hello"'),
+            ],
+          ),
+        ],
+        maxTokens: 10,
+        temperature: 0.1,
+      );
+
+      if (testCompletion.choices.isNotEmpty) {
+        final response = testCompletion.choices.first.message.content?.first.text;
+        debugPrint('✅ API Test Response: $response');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('❌ API Test Error: $e');
+      return false;
     }
   }
 
